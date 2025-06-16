@@ -3,9 +3,9 @@ package main
 import (
 	"dex-ingest-sol/internal/config"
 	"dex-ingest-sol/internal/ingest"
+	"dex-ingest-sol/internal/pkg/configloader"
+	"dex-ingest-sol/internal/pkg/logger"
 	"dex-ingest-sol/internal/svc"
-	"dex-ingest-sol/pkg/configloader"
-	"dex-ingest-sol/pkg/logger"
 	"flag"
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"

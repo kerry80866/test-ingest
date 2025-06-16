@@ -2,8 +2,8 @@ package mq
 
 import (
 	"context"
-	"dex-ingest-sol/pkg/logger"
-	"dex-ingest-sol/pkg/utils"
+	"dex-ingest-sol/internal/pkg/logger"
+	"dex-ingest-sol/internal/pkg/utils"
 	"fmt"
 	"os"
 	"strings"

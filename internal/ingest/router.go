@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dex-ingest-sol/internal/config"
-	"dex-ingest-sol/pkg/logger"
+	"dex-ingest-sol/internal/pkg/logger"
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/redis/go-redis/v9"
 	"sync"

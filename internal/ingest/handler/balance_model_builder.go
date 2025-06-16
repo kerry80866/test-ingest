@@ -2,8 +2,8 @@ package handler
 
 import (
 	"dex-ingest-sol/internal/model"
+	"dex-ingest-sol/internal/pkg/utils"
 	"dex-ingest-sol/pb"
-	"dex-ingest-sol/pkg/utils"
 	"github.com/hashicorp/golang-lru"
 )
 

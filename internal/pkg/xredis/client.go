@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"dex-ingest-sol/pkg/logger"
+	"dex-ingest-sol/internal/pkg/logger"
 	"fmt"
 	"time"
 

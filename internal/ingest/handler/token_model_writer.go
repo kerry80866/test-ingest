@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dex-ingest-sol/internal/model"
-	"dex-ingest-sol/pkg/logger"
+	"dex-ingest-sol/internal/pkg/logger"
 	"errors"
 	"fmt"
 	"runtime/debug"

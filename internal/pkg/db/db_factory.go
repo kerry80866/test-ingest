@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"dex-ingest-sol/pkg/logger"
+	"dex-ingest-sol/internal/pkg/logger"
 	"fmt"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
