@@ -1,0 +1,24 @@
+# IDE
+.idea/
+.vscode/
+
+# Binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Output
+*.out
+*.test
+
+# Dependency
+vendor/
+
+# Logs
+*.log
+
+# Config
+*.local.yaml

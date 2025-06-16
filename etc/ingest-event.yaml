@@ -1,0 +1,41 @@
+# 可选值: "event" 或 "balance"
+ingest_type: "event"
+
+# 日志配置
+logger:
+  format: "json"          # 日志格式，开发用 "console"，生产用 "json"
+  log_dir: "./logs"       # 日志输出目录，默认 logs，可指定绝对路径
+  level: "debug"          # 日志级别：debug / info / warn / error
+  compress: false         # 是否压缩旧日志文件
+
+# Worker 批处理配置：用于控制Kafka消费的触发条件与处理节奏
+worker:
+  max_block_hold: 3        # 批次中累计的最大区块数，超过则立即触发 flush
+  max_batch_flush: 5       # 每次 flush 最多处理多少个区块，用于控制处理粒度
+  flush_interval: "3s"     # 最长等待时间，超时后即使未达到 max_block_hold 也会触发 flush（Go duration 格式）
+
+# Kafka 消费者配置
+kafka:
+  name: ingest-event-consumer           # 消费者名称标识
+  brokers: # Kafka broker 地址列表（支持多个）
+    - 172.19.32.50:9092
+  topic: dex_indexer_sol_event          # 要订阅的 Kafka topic 名称
+  group_id: dex-ingest-indexer-event    # 消费者组 ID（用于负载均衡）
+  session_timeout_ms: 10000             # 会话超时时间（单位：毫秒），超时会触发 rebalance
+  heartbeat_interval_ms: 3000           # 心跳发送间隔（单位：毫秒）
+  read_timeout_ms: 1000                 # 拉取消息的超时时间（单位：毫秒）
+  reconnect_backoff_ms: 200             # 快速探测 Kafka 恢复，避免等待过久
+  reconnect_backoff_max_ms: 5000        # 防止网络中断或 Kafka 故障时产生重连风暴
+  retry_backoff_ms: 300                 # 拉取失败时，避免立即重试堆积压力
+
+# Lindorm 数据库配置
+lindorm:
+  user: dex                             # Lindorm MySQL 用户名
+  password:           # 登录密码
+  host: ld-0iwr13uihv3zv8i65-proxy-lindorm-vpc.lindorm.aliyuncs.com  # Lindorm 数据库主机名（通常为内网 IP 或 localhost）
+  port: 33060                           # 数据库端口，Lindorm 默认兼容 MySQL 协议，可设置为 3306 或 33060（宽表默认）
+  database: default                     # 要连接的数据库名
+  timeout: 5s                           # 连接超时时间（Go duration 格式，如 "5s"）
+  max_open_conns: 20                    # 最大连接数（建议为系统并发写入/查询数的 2~3 倍）
+  max_idle_conns: 10                    # 最大空闲连接数（设置为 CPU 核心数或稍小）
+  conn_max_idle_time: 5m                # 空闲连接最大保留时间（如 "5m" 表示 5 分钟）
