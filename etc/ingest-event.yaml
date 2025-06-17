@@ -36,6 +36,6 @@ lindorm:
   port: 33060                           # 数据库端口，Lindorm 默认兼容 MySQL 协议，可设置为 3306 或 33060（宽表默认）
   database: default                     # 要连接的数据库名
   timeout: 5s                           # 连接超时时间（Go duration 格式，如 "5s"）
-  max_open_conns: 20                    # 最大连接数（建议为系统并发写入/查询数的 2~3 倍）
-  max_idle_conns: 10                    # 最大空闲连接数（设置为 CPU 核心数或稍小）
+  max_open_conns: 30                    # 最大连接数（建议为系统并发写入/查询数的 2~3 倍）
+  max_idle_conns: 15                    # 最大空闲连接数（设置为 CPU 核心数或稍小）
   conn_max_idle_time: 5m                # 空闲连接最大保留时间（如 "5m" 表示 5 分钟）
