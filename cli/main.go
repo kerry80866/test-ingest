@@ -10,9 +10,7 @@ import (
 )
 
 func main() {
-	// 替换为你自己的 Lindorm/MySQL 数据源
-	dsn := "dex:abc@tcp(ld-0iwr13uihv3zv8i65-proxy-lindorm-vpc.lindorm.aliyuncs.com:33060)/default?charset=utf8mb4&parseTime=true"
-	db, err := sql.Open("mysql", dsn)
+	db, err := sql.Open("mysql", DSN)
 	if err != nil {
 		log.Fatalf("连接数据库失败: %v", err)
 	}
@@ -68,19 +66,11 @@ CREATE TABLE IF NOT EXISTS chain_event (
 
 		`CREATE INDEX IF NOT EXISTS idx_user_token_type_id_desc
      ON chain_event(user_wallet, token, event_type, event_id DESC)
-     INCLUDE (
-         dex, to_wallet, pool_address, quote_token,
-         token_amount, quote_amount, volume_usd, price_usd,
-         tx_hash, block_time
-     );`,
+     WITH (INDEX_COVERED_TYPE = 'COVERED_ALL_COLUMNS_IN_SCHEMA');`,
 
 		`CREATE INDEX IF NOT EXISTS idx_pool_type_id
      ON chain_event(pool_address, event_type, event_id DESC)
-     INCLUDE (
-         user_wallet,
-         token_amount, quote_amount, volume_usd, price_usd,
-         tx_hash, block_time
-     );`,
+     WITH (INDEX_COVERED_TYPE = 'COVERED_ALL_COLUMNS_IN_SCHEMA');`,
 
 		`
 CREATE TABLE IF NOT EXISTS pool (

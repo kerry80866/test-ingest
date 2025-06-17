@@ -31,7 +31,7 @@ kafka:
 # Lindorm 数据库配置
 lindorm:
   user: dex                             # Lindorm MySQL 用户名
-  password:           # 登录密码
+  password:            # 登录密码
   host: ld-0iwr13uihv3zv8i65-proxy-lindorm-vpc.lindorm.aliyuncs.com  # Lindorm 数据库主机名（通常为内网 IP 或 localhost）
   port: 33060                           # 数据库端口，Lindorm 默认兼容 MySQL 协议，可设置为 3306 或 33060（宽表默认）
   database: default                     # 要连接的数据库名
