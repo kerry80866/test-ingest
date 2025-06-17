@@ -43,11 +43,11 @@ func main() {
 		if err != nil {
 			log.Fatalf("event_id 参数格式错误: %v", err)
 		}
-		query += " AND event_id = ?"
+		query += " AND event_id < ?"
 		params = append(params, eventID)
-	} else {
-		query += " ORDER BY event_id DESC LIMIT 10"
 	}
+
+	query += " ORDER BY event_id DESC LIMIT 10"
 
 	db, err := sql.Open("mysql", DSN)
 	if err != nil {
