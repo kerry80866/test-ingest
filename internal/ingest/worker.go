@@ -102,11 +102,33 @@ func (w *WorkerContext) Run() {
 			}
 			w.handleMessage(msg)
 
+			// 还能再塞多少 batch
+			spaceLeft := w.MaxBatchFlush - len(w.BatchQueue)
+			if spaceLeft > 0 && len(w.MsgCh) >= spaceLeft {
+				w.drainMessages(spaceLeft)
+			}
+
+			// 触发 flush 条件
+			if len(w.BatchQueue) >= w.MaxBlockHold {
+				w.flushIfNeeded()
+			}
+
 		case <-ticker.C:
-			// 超过 flush 间隔才触发兜底
+			// 定时兜底 flush
 			if len(w.BatchQueue) > 0 && time.Since(w.lastFlushTime) > w.FlushInterval {
 				w.flushIfNeeded()
 			}
+		}
+	}
+}
+
+func (w *WorkerContext) drainMessages(batchSize int) {
+	for i := 0; i < batchSize; i++ {
+		select {
+		case msg := <-w.MsgCh:
+			w.handleMessage(msg)
+		default:
+			return
 		}
 	}
 }
@@ -115,10 +137,6 @@ func (w *WorkerContext) handleMessage(msg *kafka.Message) {
 	batch := buildBlockBatch(w.RouterType, w.Partition, msg, w.Base58Cache)
 	if batch != nil {
 		w.BatchQueue = append(w.BatchQueue, batch)
-	}
-
-	if len(w.BatchQueue) >= w.MaxBlockHold {
-		w.flushIfNeeded()
 	}
 }
 

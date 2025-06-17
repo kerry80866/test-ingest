@@ -11,7 +11,7 @@ logger:
 # Worker 批处理配置：用于控制Kafka消费的触发条件与处理节奏
 worker:
   max_block_hold: 3        # 批次中累计的最大区块数，超过则立即触发 flush
-  max_batch_flush: 5       # 每次 flush 最多处理多少个区块，用于控制处理粒度
+  max_batch_flush: 7       # 每次 flush 最多处理多少个区块，用于控制处理粒度
   flush_interval: "3s"     # 最长等待时间，超时后即使未达到 max_block_hold 也会触发 flush（Go duration 格式）
 
 # Kafka 消费者配置
