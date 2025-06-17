@@ -150,12 +150,6 @@ func upsertBalancesRealtime(ctx context.Context, db *sql.DB, balances []*model.B
 			)
 		}
 
-		builder.WriteString(" ON DUPLICATE KEY UPDATE " +
-			"owner_address=VALUES(owner_address)," +
-			"token_address=VALUES(token_address)," +
-			"balance=VALUES(balance)," +
-			"last_event_id=VALUES(last_event_id)")
-
 		query := builder.String()
 		if _, err := db.ExecContext(ctx, query, args...); err != nil {
 			return fmt.Errorf("upsert balance [%d:%d] failed: %w (first account: %s)", i, end, err, batch[0].AccountAddress)

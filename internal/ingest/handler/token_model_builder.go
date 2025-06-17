@@ -43,6 +43,7 @@ func BuildTokenModels(events *pb.Events, cache *lru.Cache) []*model.Token {
 				URI:          "",
 				Creator:      "",
 				CreateAt:     0,
+				IsCreating:   false,
 			})
 
 		case *pb.Event_Token:
@@ -68,6 +69,7 @@ func BuildTokenModels(events *pb.Events, cache *lru.Cache) []*model.Token {
 				URI:          truncate("uri", t.Uri, maxUriLen, tokenStr),
 				Creator:      creator,
 				CreateAt:     int32(t.BlockTime),
+				IsCreating:   true,
 				// UpdateAt: 由插入逻辑填充
 			})
 		}

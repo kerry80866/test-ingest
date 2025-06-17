@@ -81,8 +81,7 @@ func splitTokensForInsertAndUpdate(tokens []*model.Token) (insertList []*model.T
 				t.TokenAddress, existing.Decimals, t.Decimals)
 		}
 
-		// Launchpad 的 creator 非空，优先更新
-		if t.Creator != "" && existing.Creator == "" {
+		if t.IsCreating {
 			tokenMap[t.TokenAddress] = t
 		}
 	}
@@ -94,7 +93,7 @@ func splitTokensForInsertAndUpdate(tokens []*model.Token) (insertList []*model.T
 
 	for _, t := range tokenMap {
 		t.UpdateAt = now
-		if t.Creator != "" {
+		if t.IsCreating {
 			updateList = append(updateList, t)
 		} else {
 			insertList = append(insertList, t)
@@ -104,7 +103,7 @@ func splitTokensForInsertAndUpdate(tokens []*model.Token) (insertList []*model.T
 	return insertList, updateList
 }
 
-func execTokenBatch(ctx context.Context, db *sql.DB, tokens []*model.Token, update bool) (err error) {
+func execTokenBatch(ctx context.Context, db *sql.DB, tokens []*model.Token, isCreating bool) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Errorf("execTokenBatch panic: %v\n%s", r, debug.Stack())
@@ -138,25 +137,15 @@ func execTokenBatch(ctx context.Context, db *sql.DB, tokens []*model.Token, upda
 			)
 		}
 
-		if update {
-			builder.WriteString(" ON DUPLICATE KEY UPDATE " +
-				"decimals=VALUES(decimals)," +
-				"source=VALUES(source)," +
-				"total_supply=VALUES(total_supply)," +
-				"name=VALUES(name)," +
-				"symbol=VALUES(symbol)," +
-				"uri=VALUES(uri)," +
-				"creator=VALUES(creator)," +
-				"update_at=VALUES(update_at)")
-		} else {
+		if !isCreating {
 			builder.WriteString(" ON DUPLICATE KEY IGNORE")
 		}
 
 		query := builder.String()
 		if _, err := db.ExecContext(ctx, query, args...); err != nil {
 			action := "insert"
-			if update {
-				action = "update"
+			if isCreating {
+				action = "create"
 			}
 			return fmt.Errorf("%s token [%d:%d] failed: %w", action, i, end, err)
 		}
