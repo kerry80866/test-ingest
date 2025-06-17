@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,11 +20,50 @@ const (
 
 var chainEventsValuePlaceholder = "(" + strings.Repeat("?,", chainEventsUpsertFieldCount-1) + "?)"
 
-func InsertChainEvents(ctx context.Context, db *sql.DB, events []*model.ChainEvent) (err error) {
+func InsertChainEvents(ctx context.Context, db *sql.DB, events []*model.ChainEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	const workers = 2
+	var wg sync.WaitGroup
+	var once sync.Once
+	var firstErr error
+
+	// ceil(len(events) / workers)：将 events 平均分配给 workers 个批次
+	batchSize := (len(events) + workers - 1) / workers
+
+	for i := 0; i < workers; i++ {
+		start := i * batchSize
+		if start >= len(events) {
+			break
+		}
+		end := (i + 1) * batchSize
+		if end > len(events) {
+			end = len(events)
+		}
+		sub := events[start:end]
+
+		wg.Add(1)
+		go func(evts []*model.ChainEvent) {
+			defer wg.Done()
+			if err := insertChainEventsSerial(ctx, db, evts); err != nil {
+				once.Do(func() {
+					firstErr = err
+				})
+			}
+		}(sub)
+	}
+
+	wg.Wait()
+	return firstErr
+}
+
+func insertChainEventsSerial(ctx context.Context, db *sql.DB, events []*model.ChainEvent) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf("InsertChainEvents panic: %v\n%s", r, debug.Stack())
-			err = fmt.Errorf("InsertChainEvents panic: %v", r)
+			logger.Errorf("insertChainEventsSerial panic: %v\n%s", r, debug.Stack())
+			err = fmt.Errorf("insertChainEventsSerial panic: %v", r)
 		}
 	}()
 
