@@ -8,6 +8,8 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/redis/go-redis/v9"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 type PartitionRouter struct {
@@ -18,11 +20,12 @@ type PartitionRouter struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	routerType RouterType
-	db         *sql.DB
-	redis      *redis.Client
-	kafka      *kafka.Consumer
-	config     *config.WorkerConfig
+	routerType  RouterType
+	db          *sql.DB
+	redis       *redis.Client
+	kafka       *kafka.Consumer
+	config      *config.WorkerConfig
+	lastLogTime atomic.Int64
 }
 
 // NewPartitionRouter 构造函数，需指定类型
@@ -80,8 +83,12 @@ func (r *PartitionRouter) Dispatch(msg *kafka.Message) {
 	select {
 	case ch <- msg:
 	default:
-		logger.Warnf("[partition=%d] message dropped or blocked", partition)
-		// 或者 block 但打日志
+		// block 但打印日志
+		now := time.Now().Unix()
+		last := r.lastLogTime.Load()
+		if now-last >= 15 && r.lastLogTime.CompareAndSwap(last, now) {
+			logger.Warnf("[partition=%d] message dropped or blocked, channel full", partition)
+		}
 		ch <- msg
 	}
 }

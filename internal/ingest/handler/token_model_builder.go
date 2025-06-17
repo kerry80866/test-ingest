@@ -36,6 +36,13 @@ func BuildTokenModels(events *pb.Events, cache *lru.Cache) []*model.Token {
 			result = append(result, &model.Token{
 				TokenAddress: utils.EncodeBase58Strict(cache, ev.Liquidity.Token),
 				Decimals:     int16(ev.Liquidity.TokenDecimals),
+				Source:       int16(0),
+				TotalSupply:  "0",
+				Name:         "",
+				Symbol:       "",
+				URI:          "",
+				Creator:      "",
+				CreateAt:     0,
 			})
 
 		case *pb.Event_Token:
