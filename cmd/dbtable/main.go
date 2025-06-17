@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// 替换为你自己的 Lindorm/MySQL 数据源
-	dsn := "root:password@tcp(localhost:3306)/your_db?charset=utf8mb4&parseTime=true"
+	dsn := "dex:abc@tcp(ld-0iwr13uihv3zv8i65-proxy-lindorm-vpc.lindorm.aliyuncs.com:33060)/default?charset=utf8mb4&parseTime=true"
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatalf("连接数据库失败: %v", err)

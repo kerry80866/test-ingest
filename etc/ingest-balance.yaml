@@ -4,7 +4,7 @@ ingest_type: "balance"
 # 日志配置
 logger:
   format: "json"          # 日志格式，开发用 "console"，生产用 "json"
-  log_dir: "./logs"       # 日志输出目录，默认 logs，可指定绝对路径
+  log_dir: "./balance-logs"       # 日志输出目录，默认 logs，可指定绝对路径
   level: "debug"          # 日志级别：debug / info / warn / error
   compress: false         # 是否压缩旧日志文件
 
