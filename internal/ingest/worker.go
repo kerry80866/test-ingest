@@ -159,15 +159,17 @@ func (w *WorkerContext) flushIfNeeded() {
 		endSlot := toFlush[len(toFlush)-1].Slot
 
 		// 统计事件数量（事件 Router 才有意义）
-		eventCount := 0
 		if w.RouterType == RouterEvent {
+			eventCount := 0
 			for _, b := range toFlush {
 				eventCount += len(b.Events)
 			}
+			logger.Infof("[partition=%d] flushing %d batches, %d events (slots %d → %d)",
+				w.Partition, flushCount, eventCount, startSlot, endSlot)
+		} else {
+			logger.Infof("[partition=%d] flushing %d batches, (slots %d → %d)",
+				w.Partition, flushCount, startSlot, endSlot)
 		}
-
-		logger.Infof("[partition=%d] flushing %d batches, %d events (slots %d → %d)",
-			w.Partition, flushCount, eventCount, startSlot, endSlot)
 	}
 }
 
