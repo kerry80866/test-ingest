@@ -24,25 +24,26 @@ func InsertChainEvents(ctx context.Context, db *sql.DB, events []*model.ChainEve
 	if len(events) == 0 {
 		return nil
 	}
+	eventsCount := len(events)
 
-	const workers = 2
+	batchSize := 100
+	maxWorkers := 10
+
+	if len(events) > batchSize*maxWorkers {
+		// ceil(eventsCount / workers)：将 events 平均分配给 workers 个批次
+		batchSize = (eventsCount + maxWorkers - 1) / maxWorkers
+	}
+
 	var wg sync.WaitGroup
 	var once sync.Once
 	var firstErr error
 
-	// ceil(len(events) / workers)：将 events 平均分配给 workers 个批次
-	batchSize := (len(events) + workers - 1) / workers
-
-	for i := 0; i < workers; i++ {
-		start := i * batchSize
-		if start >= len(events) {
-			break
+	for i := 0; i < eventsCount; i += batchSize {
+		end := i + batchSize
+		if end > eventsCount {
+			end = eventsCount
 		}
-		end := (i + 1) * batchSize
-		if end > len(events) {
-			end = len(events)
-		}
-		sub := events[start:end]
+		batch := events[i:end]
 
 		wg.Add(1)
 		go func(evts []*model.ChainEvent) {
@@ -52,7 +53,7 @@ func InsertChainEvents(ctx context.Context, db *sql.DB, events []*model.ChainEve
 					firstErr = err
 				})
 			}
-		}(sub)
+		}(batch)
 	}
 
 	wg.Wait()
@@ -100,8 +101,6 @@ func insertChainEventsSerial(ctx context.Context, db *sql.DB, events []*model.Ch
 				e.TxHash, e.Signer, e.BlockTime, createAt,
 			)
 		}
-
-		builder.WriteString(" ON DUPLICATE KEY IGNORE")
 
 		query := builder.String()
 		if _, err := db.ExecContext(ctx, query, args...); err != nil {

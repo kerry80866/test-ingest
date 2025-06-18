@@ -82,13 +82,19 @@ go run cli/consts.go cli/query_by_pool.go <pool_address>
 go run cli/consts.go cli/query_balance.go <token_address>
 ```
 
+#### 查询某个 token 的前 100 名持有者
+
+```bash
+go run cli/consts.go cli/top_holders.go 6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN 100
+```
+
 ### token + owner 精确匹配
 
 ```bash
 go run cli/consts.go cli/query_balance.go <token_address> <owner_address>
 ```
 
-### 按 owner 查询（使用 idx_balance_owner_token）
+### 按 owner 查询（用户持有哪些币种）
 
 ```bash
 go run cli/consts.go cli/query_balance.go -o <owner_address>
@@ -121,7 +127,7 @@ go run cli/consts.go cli/query_pool.go <pool_address>
 ### 查询某 token 相关的所有池子
 
 ```bash
-go run cli/consts.go cli/query_pool.go -t <token_address>
+go run cli/consts.go cli/query_pool.go -t 6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN
 ```
 
 ### 查询 token + quote 的池子（使用 idx_pool_token_quote）

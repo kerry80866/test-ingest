@@ -11,7 +11,7 @@ import (
 
 func main() {
 	args := os.Args
-	if len(args) < 2 || len(args) > 3 {
+	if len(args) < 2 || len(args) > 4 {
 		fmt.Printf("用法:\n")
 		fmt.Printf("  %s <pool_address>                         # 使用主键查询 pool\n", args[0])
 		fmt.Printf("  %s -t <token_address>                     # 使用 token_address 查询池子\n", args[0])
