@@ -138,3 +138,12 @@ go run cli/consts.go cli/query_pool.go -t <token_address> <quote_address>
 
 ---
 
+## 📊 统计表行数
+
+### 统计 chain_event、balance、token、pool 等表的行数
+
+```bash
+go run cli/consts.go cli/count_table_rows.go
+```
+
+---

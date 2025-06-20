@@ -27,7 +27,7 @@ func main() {
 
 	if args[1] == "-o" {
 		if len(args) == 3 {
-			query = "SELECT * FROM balance WHERE owner_address = ? ORDER BY token_address LIMIT 20"
+			query = "SELECT * FROM balance WHERE owner_address = ? LIMIT 20"
 			params = append(params, args[2])
 		} else if len(args) == 4 {
 			query = "SELECT * FROM balance WHERE owner_address = ? AND token_address = ? LIMIT 1"
@@ -39,7 +39,7 @@ func main() {
 		if len(args) == 2 {
 			tokenAddress = args[1]
 			showHolderCount = true
-			query = "SELECT * FROM balance WHERE token_address = ? ORDER BY owner_address LIMIT 20"
+			query = "SELECT * FROM balance WHERE token_address = ? LIMIT 20"
 			params = append(params, args[1])
 		} else if len(args) == 3 {
 			query = "SELECT * FROM balance WHERE token_address = ? AND owner_address = ? LIMIT 1"

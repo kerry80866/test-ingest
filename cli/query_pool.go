@@ -24,7 +24,7 @@ func main() {
 
 	if args[1] == "-t" {
 		if len(args) == 3 {
-			query = "SELECT * FROM pool WHERE token_address = ? ORDER BY update_at DESC LIMIT 10"
+			query = "SELECT * FROM pool WHERE token_address = ? DESC LIMIT 10"
 			params = append(params, args[2])
 		} else if len(args) == 4 {
 			query = "SELECT * FROM pool WHERE token_address = ? AND quote_address = ? LIMIT 1"

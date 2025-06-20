@@ -34,7 +34,7 @@ func main() {
 		},
 		{
 			name:  "Alter MUTABILITY to MUTABLE_LATEST",
-			query: "ALTER TABLE chain_event SET TBLPROPERTIES ('MUTABILITY' = 'MUTABLE_LATEST')",
+			query: "ALTER TABLE chain_event SET 'MUTABILITY' = 'MUTABLE_LATEST'",
 		},
 		{
 			name: "Create idx_user_token_type_id_desc",

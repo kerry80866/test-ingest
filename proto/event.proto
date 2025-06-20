@@ -4,6 +4,11 @@ package pb;
 
 option go_package = "dex-ingest-sol/pb;pb"; // 模块名 + pb 输出目录
 
+// ==============================
+// Kafka Topic 说明
+// ==============================
+// • dex_indexer_sol_balance：仅用于 BALANCE_UPDATE 事件（EventType = 60）
+// • dex_indexer_sol_event：其余所有事件类型统一推送到此 Topic
 
 enum DexType {
   DEX_UNKNOWN = 0;            // 未知 DEX 类型
