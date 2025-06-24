@@ -11,7 +11,10 @@ import (
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
 	zerosvc "github.com/zeromicro/go-zero/core/service"
+	"os"
+	"os/signal"
 	"runtime/debug"
+	"syscall"
 )
 
 var configFile = flag.String("f", "etc/ingest-event.yaml", "the config file")
@@ -64,7 +67,16 @@ func main() {
 		sg.Add(monitorServer)
 	}
 
+	// 启动服务
 	logger.Infof("落库服务启动成功, ingest_type=%s, topic=%s",
 		c.IngestType, c.KafkaConsumer.Topic)
 	sg.Start()
+
+	// 等待退出
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("Shutting down services...")
+	sg.Stop()
 }

@@ -14,7 +14,10 @@ import (
 	zerosvc "github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
+	"os"
+	"os/signal"
 	"runtime/debug"
+	"syscall"
 )
 
 var configFile = flag.String("f", "etc/query-service.yaml", "the config file")
@@ -69,4 +72,12 @@ func main() {
 	// ========== 7. 启动服务 ==========
 	logger.Infof("服务启动成功，gRPC端口: %d，Nacos服务名: %s", c.Grpc.Port, c.Nacos.ServiceName)
 	sg.Start()
+
+	// ========== 8. 等待退出信号 ==========
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("Shutting down services...")
+	sg.Stop()
 }
