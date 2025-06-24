@@ -48,6 +48,7 @@ func (c *GrpcConfig) ToRpcServerConf() zrpc.RpcServerConf {
 // NacosConfig Nacos 注册中心相关配置
 type NacosConfig struct {
 	ServiceName         string   `yaml:"service_name"`            // 注册到 Nacos 的服务名称，用于服务发现
+	GroupName           string   `yaml:"group_name"`              // Nacos 中的服分组名称，默认为 DEFAULT_GROUP
 	Weight              int      `yaml:"weight"`                  // 服务权重，用于负载均衡
 	Username            string   `yaml:"username"`                // 连接 Nacos 的用户名
 	Password            string   `yaml:"password"`                // 连接 Nacos 的密码

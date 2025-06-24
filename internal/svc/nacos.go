@@ -72,6 +72,7 @@ func RegisterNacosInstance(client naming_client.INamingClient, cfg *config.Nacos
 		Enable:      true,
 		Healthy:     true,
 		Ephemeral:   true,
+		GroupName:   cfg.GroupName,
 	}
 
 	success, err := client.RegisterInstance(param)

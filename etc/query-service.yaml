@@ -42,6 +42,7 @@ lindorm:
 # Nacos 配置
 nacos:
   service_name: "dex-ingest-grpc"       # 注册到 Nacos 的服务名称，用于服务发现
+  group_name: "DEX"                     # Nacos 中的服分组名称，默认为 DEFAULT_GROUP
   weight: 10                            # 服务权重，用于负载均衡
   username: "nacos"                     # 新增用户名
   password: "nacos"                     # 新增密码

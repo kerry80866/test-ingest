@@ -191,6 +191,6 @@ func testQueryPoolsByToken(client pb.IngestQueryServiceClient) {
 	}
 	log.Printf("PoolsByToken result:")
 	for _, pool := range resp.Pools {
-		log.Printf("pool_address=%s token=%s quote=%s", pool.PoolAddress, pool.TokenAddress, pool.QuoteAddress)
+		log.Printf("pool_address=%s quote=%s tokenAccount=%s quoteAccount=%s", pool.PoolAddress, pool.QuoteAddress, pool.TokenAccount, pool.QuoteAccount)
 	}
 }
