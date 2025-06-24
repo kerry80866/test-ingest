@@ -3,7 +3,7 @@ package handler
 import (
 	"context"
 	"database/sql"
-	"dex-ingest-sol/internal/model"
+	"dex-ingest-sol/internal/ingest/model"
 	"dex-ingest-sol/internal/pkg/logger"
 	"fmt"
 	"runtime/debug"

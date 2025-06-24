@@ -1,6 +1,10 @@
 # 可选值: "event" 或 "balance"
 ingest_type: "balance"
 
+# 监控服务配置
+monitor:
+  port: 9528            # 监控服务监听端口，0 表示关闭
+
 # 日志配置
 logger:
   format: "json"          # 日志格式，开发用 "console"，生产用 "json"

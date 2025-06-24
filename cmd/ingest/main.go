@@ -5,15 +5,13 @@ import (
 	"dex-ingest-sol/internal/ingest"
 	"dex-ingest-sol/internal/pkg/configloader"
 	"dex-ingest-sol/internal/pkg/logger"
+	"dex-ingest-sol/internal/pkg/monitor"
 	"dex-ingest-sol/internal/svc"
 	"flag"
 	"fmt"
 	"github.com/zeromicro/go-zero/core/logx"
 	zerosvc "github.com/zeromicro/go-zero/core/service"
-	"os"
-	"os/signal"
 	"runtime/debug"
-	"syscall"
 )
 
 var configFile = flag.String("f", "etc/ingest-event.yaml", "the config file")
@@ -30,7 +28,7 @@ func main() {
 	logger.Infof("Loading config from %s", *configFile)
 
 	// 加载配置
-	var c config.Config
+	var c config.IngestConfig
 	if err := configloader.LoadConfig(*configFile, &c); err != nil {
 		panic(fmt.Sprintf("配置加载失败: %v", err))
 	}
@@ -40,7 +38,7 @@ func main() {
 	logx.SetWriter(logger.ZapWriter{})
 
 	// 初始化依赖注入上下文
-	svcCtx := svc.NewServiceContext(&c)
+	svcCtx := svc.NewIngestServiceContext(&c)
 
 	// 解析 ingest_type 并构建 PartitionRouter
 	routerType, err := ingest.ParseRouterType(c.IngestType)
@@ -61,14 +59,12 @@ func main() {
 	sg.Add(partitionRouter)
 	sg.Add(consumerRunner)
 
-	logger.Info("Service started")
+	if c.Monitor.Port > 0 {
+		monitorServer := monitor.NewMonitorServer(c.Monitor.Port)
+		sg.Add(monitorServer)
+	}
+
+	logger.Infof("落库服务启动成功, ingest_type=%s, topic=%s",
+		c.IngestType, c.KafkaConsumer.Topic)
 	sg.Start()
-
-	// 等待退出信号
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	logger.Info("Shutting down services...")
-	sg.Stop()
 }

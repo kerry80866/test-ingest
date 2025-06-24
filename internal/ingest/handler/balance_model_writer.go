@@ -3,8 +3,7 @@ package handler
 import (
 	"context"
 	"database/sql"
-	"dex-ingest-sol/internal/model"
-	"dex-ingest-sol/internal/pkg/utils"
+	"dex-ingest-sol/internal/ingest/model"
 	"errors"
 	"fmt"
 	"strings"
@@ -34,7 +33,7 @@ func InsertBalances(ctx context.Context, db *sql.DB, balances []*model.Balance, 
 
 	// 第二步：按 balance 分类成更新数组和删除数组
 	toUpdate := make([]*model.Balance, 0, len(balances))
-	toDelete := make([]*model.Balance, 0, utils.Max(10, len(balances)/3))
+	toDelete := make([]*model.Balance, 0, max(10, len(balances)/3))
 	for _, b := range latestMap {
 		if b.Balance == "0" {
 			toDelete = append(toDelete, b)

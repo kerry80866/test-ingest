@@ -1,14 +1,14 @@
 package handler
 
 import (
-	"dex-ingest-sol/internal/model"
+	"dex-ingest-sol/internal/ingest/model"
 	"dex-ingest-sol/internal/pkg/utils"
 	"dex-ingest-sol/pb"
 	"github.com/hashicorp/golang-lru"
 )
 
 func BuildPoolModels(events *pb.Events, cache *lru.Cache) []*model.Pool {
-	initialCap := utils.Max(10, len(events.Events)/3)
+	initialCap := max(10, len(events.Events)/3)
 	result := make([]*model.Pool, 0, initialCap)
 	for _, e := range events.Events {
 		event, ok := e.Event.(*pb.Event_Liquidity)

@@ -7,14 +7,14 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type ServiceContext struct {
-	Cfg   *config.Config // 改为指针
+type IngestServiceContext struct {
+	Cfg   *config.IngestConfig
 	DB    *sql.DB
 	Redis *redis.Client
 }
 
-func NewServiceContext(c *config.Config) *ServiceContext {
-	return &ServiceContext{
+func NewIngestServiceContext(c *config.IngestConfig) *IngestServiceContext {
+	return &IngestServiceContext{
 		Cfg:   c,
 		DB:    MustInitLindorm(c.Lindorm),
 		Redis: nil,

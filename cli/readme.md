@@ -15,7 +15,7 @@ go run cli/consts.go cli/<脚本文件名>.go [参数...]
 ### 重新构建所有索引
 
 ```bash
-go run cli/consts.go cli/build_indexes.go
+go run cli/consts.go cli/rebuild_indexes.go
 ```
 
 ---
@@ -46,24 +46,18 @@ go run cli/consts.go cli/query_event_by_id.go <event_id>
 
 ---
 
-## 👤 user_wallet + token 查询事件
+## 👤 user_wallet 查询事件
 
 ```bash
-go run cli/consts.go cli/query_by_user_token.go <user_wallet> <token>
+go run cli/consts.go cli/query_event_by_user.go <user_wallet> <limit> <event_id> <event_type>
 ```
-
-支持以下组合：
-
-- user_wallet + token
-- user_wallet + token + event_type
-- user_wallet + token + event_type + event_id
 
 ---
 
 ## 🏊 pool_address 查询事件
 
 ```bash
-go run cli/consts.go cli/query_by_pool.go <pool_address>
+go run cli/consts.go cli/query_event_by_pool.go <pool_address>
 ```
 
 支持以下组合：
@@ -74,18 +68,26 @@ go run cli/consts.go cli/query_by_pool.go <pool_address>
 
 ---
 
-## 💰 balance 表查询
-
-### 按 token 查询 holders（使用 idx_balance_token）
+## 👤 upool_address + ser_wallet 查询事件
 
 ```bash
-go run cli/consts.go cli/query_balance.go <token_address>
+go run cli/consts.go cli/query_event_by_pool_maker.go <pool_address> <user_wallet> <event_type>  <event_id> <limit>
 ```
+
+---
+
+## 💰 balance 表查询
 
 #### 查询某个 token 的前 100 名持有者
 
 ```bash
-go run cli/consts.go cli/top_holders.go 6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN 100
+go run cli/consts.go cli/query_balance_top_holders.go 6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN 100
+```
+
+### 查询某个 token 的holders数量
+
+```bash
+go run cli/consts.go cli/query_balance.go <token_address>
 ```
 
 ### token + owner 精确匹配

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"dex-ingest-sol/internal/config"
 	"dex-ingest-sol/internal/ingest/handler"
-	"dex-ingest-sol/internal/model"
+	"dex-ingest-sol/internal/ingest/model"
 	"dex-ingest-sol/internal/pkg/logger"
 	"dex-ingest-sol/internal/pkg/utils"
 	"dex-ingest-sol/pb"
@@ -312,19 +312,6 @@ func (w *WorkerContext) flushEventBatches(batches []*BlockBatch) {
 				logger.Errorf("[partition=%d] insertPools error: %v", w.Partition, err)
 			}
 			logger.Infof("[partition=%d] insertPools done in %s", w.Partition, time.Since(start))
-		}()
-	}
-
-	// 写入 Token 数据
-	if len(tokens) > 0 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			start := time.Now()
-			if err := handler.InsertTokens(w.ctx, w.DB, tokens); err != nil {
-				logger.Errorf("[partition=%d] insertTokens error: %v", w.Partition, err)
-			}
-			logger.Infof("[partition=%d] insertTokens done in %s", w.Partition, time.Since(start))
 		}()
 	}
 

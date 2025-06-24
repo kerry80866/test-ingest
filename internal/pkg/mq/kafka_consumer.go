@@ -18,7 +18,7 @@ type KafkaConsumerConf struct {
 	Name                  string   `json:"name" yaml:"name"`                                         // 用于标识用途，如 event/balance
 	Brokers               []string `json:"brokers" yaml:"brokers"`                                   // Kafka 集群 broker 地址列表
 	Topic                 string   `json:"topic" yaml:"topic"`                                       // 订阅的 topic 名称
-	GroupId               string   `json:"group_id" yaml:"group_id"`                                 // 消费者组 ID，同组实现高可用
+	GroupID               string   `json:"group_id" yaml:"group_id"`                                 // 消费者组 ID，同组实现高可用
 	SessionTimeoutMs      int      `json:"session_timeout_ms" yaml:"session_timeout_ms"`             // 会话超时时间（ms）
 	HeartbeatIntervalMs   int      `json:"heartbeat_interval_ms" yaml:"heartbeat_interval_ms"`       // 心跳间隔（ms）
 	ReadTimeoutMs         int      `json:"read_timeout_ms" yaml:"read_timeout_ms"`                   // 拉取消息超时时间（ms）
@@ -39,20 +39,24 @@ type KafkaConsumer struct {
 
 func buildClientID(service string) string {
 	hostname, _ := os.Hostname()
-	return fmt.Sprintf("%s-%s-%s", service, hostname, utils.GetLocalIP())
+	localIP, _ := utils.GetLocalIP()
+	if localIP == "" {
+		localIP = "unknown"
+	}
+	return fmt.Sprintf("%s-%s-%s", service, hostname, localIP)
 }
 
 // NewKafkaConsumer 创建并初始化消费者实例
 func NewKafkaConsumer(conf *KafkaConsumerConf, handler Handler) (*KafkaConsumer, error) {
-	clientId := buildClientID(conf.Name)
+	clientID := buildClientID(conf.Name)
 	kconf := &kafka.ConfigMap{
 		"bootstrap.servers":     strings.Join(conf.Brokers, ","),
-		"group.id":              conf.GroupId,
+		"group.id":              conf.GroupID,
 		"session.timeout.ms":    conf.SessionTimeoutMs,
 		"heartbeat.interval.ms": conf.HeartbeatIntervalMs,
 		"auto.offset.reset":     "latest", // 默认只消费新数据
 		"enable.auto.commit":    false,    // 只支持手动提交
-		"client.id":             clientId,
+		"client.id":             clientID,
 
 		// 连接 & 重试相关
 		"reconnect.backoff.ms":     conf.ReconnectBackoffMs,
@@ -64,7 +68,7 @@ func NewKafkaConsumer(conf *KafkaConsumerConf, handler Handler) (*KafkaConsumer,
 		logger.Errorf("kafka consumer create error: %v", err)
 		return nil, err
 	}
-	logger.Infof("kafka consumer created, brokers=%v, topic=%s, group=%s", conf.Brokers, conf.Topic, conf.GroupId)
+	logger.Infof("kafka consumer created, brokers=%v, topic=%s, group=%s", conf.Brokers, conf.Topic, conf.GroupID)
 	return &KafkaConsumer{
 		Consumer: c,
 		Conf:     conf,

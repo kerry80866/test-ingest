@@ -13,23 +13,24 @@ import (
 
 func main() {
 	args := os.Args
-	if len(args) < 3 || len(args) > 5 {
-		fmt.Printf("用法: %s <user_wallet> <token> [event_type] [event_id]\n", args[0])
+	if len(args) < 2 || len(args) > 6 {
+		fmt.Printf("用法: %s <pool_address> [maker] [event_type] [event_id] [limit]\n", args[0])
 		os.Exit(1)
 	}
 
-	userWallet := args[1]
-	token := args[2]
+	pool := args[1]
 
-	var (
-		query  string
-		params []any
-	)
+	query := "SELECT * FROM chain_event WHERE pool_address = ?"
+	params := []any{pool}
 
-	query = "SELECT * FROM chain_event WHERE user_wallet = ? AND token = ?"
-	params = append(params, userWallet, token)
+	// 可选：maker
+	if len(args) >= 3 && args[2] != "-" {
+		query += " AND user_wallet = ?"
+		params = append(params, args[2])
+	}
 
-	if len(args) >= 4 {
+	// 可选：event_type
+	if len(args) >= 4 && args[3] != "-" {
 		eventType, err := strconv.Atoi(args[3])
 		if err != nil {
 			log.Fatalf("event_type 应为整数: %v", err)
@@ -38,16 +39,28 @@ func main() {
 		params = append(params, eventType)
 	}
 
-	if len(args) == 5 {
+	// 可选：event_id（分页）
+	if len(args) >= 5 && args[4] != "-" {
 		eventID, ok := new(big.Int).SetString(args[4], 10)
 		if !ok {
-			log.Fatalf("event_id 格式不合法: %s", args[4])
+			log.Fatalf("event_id 格式非法: %s", args[4])
 		}
-		query += " AND event_id = ?"
+		query += " AND event_id < ?"
 		params = append(params, eventID.String())
 	}
 
-	query += " ORDER BY event_id DESC LIMIT 10"
+	// 可选：limit
+	limit := 10
+	if len(args) == 6 {
+		l, err := strconv.Atoi(args[5])
+		if err != nil || l <= 0 {
+			log.Fatalf("limit 应为正整数: %v", err)
+		}
+		limit = l
+	}
+
+	query += " ORDER BY event_id DESC LIMIT ?"
+	params = append(params, limit)
 
 	db, err := sql.Open("mysql", DSN)
 	if err != nil {

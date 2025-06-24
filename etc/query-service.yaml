@@ -1,0 +1,57 @@
+# gRPC 服务配置
+grpc:
+  port: 50051           # 监听端口，最终拼接为 listen_on: 0.0.0.0:50051
+  timeout: 3000         # 全局 gRPC 方法超时时间，单位毫秒
+  cpu_threshold: 800    # CPU 使用率超过该值时自动熔断（范围 0~1000，默认 900）
+  health: false         # 当前用 Nacos 心跳，不启用 Health 接口无影响
+
+  middlewares:
+    prometheus: true    # 启用 Prometheus 监控指标采集（/metrics）
+
+  method_timeouts:      # 方法粒度的 timeout 管理
+    - full_method: /pb.IngestQueryService/QueryTopHoldersByToken
+      timeout: 6s
+    - full_method: /pb.IngestQueryService/QueryHolderCountByToken
+      timeout: 5s
+    - full_method: /pb.IngestQueryService/QueryEventsByIDs
+      timeout: 5s
+
+# 监控服务配置
+monitor:
+  port: 9530            # 监控服务监听端口，0 表示关闭
+
+# 日志配置
+logger:
+  format: "json"          # 日志格式，开发用 "console"，生产用 "json"
+  log_dir: "./query-logs" # 日志输出目录，默认 logs，可指定绝对路径
+  level: "debug"          # 日志级别：debug / info / warn / error
+  compress: false         # 是否压缩旧日志文件
+
+# Lindorm 数据库配置
+lindorm:
+  user: dex                             # Lindorm MySQL 用户名
+  password:           # 登录密码
+  host: ld-0iwr13uihv3zv8i65-proxy-lindorm-vpc.lindorm.aliyuncs.com  # Lindorm 数据库主机名（通常为内网 IP 或 localhost）
+  port: 33060                           # 数据库端口，Lindorm 默认兼容 MySQL 协议，可设置为 3306 或 33060（宽表默认）
+  database: default                     # 要连接的数据库名
+  timeout: 5s                           # 连接超时时间（Go duration 格式，如 "5s"）
+  max_open_conns: 512                   # 最大连接数（建议为系统并发写入/查询数的 2~3 倍）
+  max_idle_conns: 32                    # 最大空闲连接数（设置为 CPU 核心数或稍小）
+  conn_max_idle_time: 5m                # 空闲连接最大保留时间（如 "5m" 表示 5 分钟）
+
+# Nacos 配置
+nacos:
+  service_name: "dex-ingest-grpc"       # 注册到 Nacos 的服务名称，用于服务发现
+  weight: 10                            # 服务权重，用于负载均衡
+  username: "nacos"                     # 新增用户名
+  password: "nacos"                     # 新增密码
+  timeout_ms: 6000                      # 与 Nacos 服务中心通信超时时间（毫秒）
+  beat_interval_ms: 3600                # 与 Nacos 服务中心的心跳设置
+  namespace_id: ""                      # 空字符串表示使用默认公共命名空间(public)
+  not_load_cache_at_start: true         # 启动时是否读取缓存，true 表示不读取，防止缓存脏数据
+  log_level: info                       # 日志级别
+  cache_dir: "nacos/cache"              # 本地缓存目录
+  log_dir: "nacos/log"                  # 日志文件目录
+  endpoint: ""                          # 地址服务器域名，留空表示不使用，与static_servers二选一
+  static_servers:                       # 静态 Nacos 服务列表，与endpoint二选一
+    - "172.19.32.50:8848"

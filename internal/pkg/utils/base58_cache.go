@@ -5,26 +5,6 @@ import (
 	"github.com/mr-tron/base58"
 )
 
-const (
-	wsolMintStr = "So11111111111111111111111111111111111111112"
-	usdcMintStr = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-	usdtMintStr = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"
-)
-
-var (
-	solMint     = make([]byte, 32)
-	wsolMint, _ = base58.Decode(wsolMintStr)
-	usdcMint, _ = base58.Decode(usdcMintStr)
-	usdtMint, _ = base58.Decode(usdtMintStr)
-)
-
-var wellKnownBase58Map = map[string]string{
-	string(solMint):  "0",
-	string(wsolMint): "1",
-	string(usdcMint): "2",
-	string(usdtMint): "3",
-}
-
 // NewBase58Cache 初始化 LRU 缓存（最大 20,000 个）
 func NewBase58Cache() *lru.Cache {
 	cache, err := lru.New(20000)
@@ -43,7 +23,7 @@ func EncodeBase58Strict(cache *lru.Cache, b []byte) string {
 
 	// 对固定 32 字节切片，用 string(b) 做 map key 是安全且高效的
 	key := string(b)
-	if val, ok := wellKnownBase58Map[key]; ok {
+	if val, ok := knownTokenMintToID[key]; ok {
 		return val
 	}
 

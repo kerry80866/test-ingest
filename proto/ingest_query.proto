@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "dex-ingest-sol/pb;pb"; // 模块名 + pb 输出目录
+
+// ==========================================
+// Nacos Service Name: dex-ingest-grpc
+// ==========================================
+
+// ========== Event 查询 ==========
+
+message EventIDsReq {
+  repeated uint64 event_ids = 1;
+}
+
+message ChainEventResult {
+  uint64 event_id = 1;
+  optional ChainEvent event = 2;
+}
+
+message EventListResp {
+  repeated ChainEventResult results = 1;
+}
+
+message UserEventReq {
+  string user_wallet = 1;
+  repeated uint32 event_type = 2;
+  optional uint64 event_id = 3;
+  optional uint32 limit = 4;   // 限制返回条数
+}
+
+message PoolEventReq {
+  string pool_address = 1;
+  repeated uint32 event_type = 2;
+  optional uint64 event_id = 3;
+  optional uint32 limit = 4;   // 限制返回条数
+}
+
+message ChainEvent {
+  uint32 event_id_hash = 1;
+  uint64 event_id = 2;
+  uint32 event_type = 3;
+  uint32 dex = 4;
+
+  string user_wallet = 5;
+  string to_wallet = 6;
+
+  string pool_address = 7;
+  string token = 8;
+  string quote_token = 9;
+
+  uint64 token_amount = 10;
+  uint64 quote_amount = 11;
+  double volume_usd = 12;
+  double price_usd = 13;
+
+  string tx_hash = 14;
+  string signer = 15;
+
+  uint32 block_time = 16;
+  uint32 create_at = 17;
+}
+
+message EventResp {
+  repeated ChainEvent events = 1;
+}
+
+// ========== Balance 查询 ==========
+
+message TokenReq {
+  string token_address = 1;
+}
+
+message TokenTopReq {
+  string token_address = 1;
+  optional uint32 limit = 2; // 可选参数，查询的最多账户数
+}
+
+message OwnerReq {
+  string owner_address = 1;
+  optional string token_address = 2;
+}
+
+message AccountsReq {
+  repeated string accounts = 1;
+}
+
+message Balance {
+  string account_address = 1;
+  string owner_address = 2;
+  string token_address = 3;
+  uint64 balance = 4;
+  uint64 last_event_id = 5;
+}
+
+message BalanceResult {
+  string account_address = 1;
+  optional Balance balance = 2;
+}
+
+message BalanceListResp {
+  repeated BalanceResult results = 1;
+}
+
+message BalanceResp {
+  repeated Balance balances = 1;
+}
+
+message Holder {
+  string owner_address = 1;
+  uint64 balance = 2;
+}
+
+message HolderListResp {
+  repeated Holder holders = 1;
+}
+
+message HolderCountResp {
+  uint64 count = 1;
+}
+
+// ========== Pool 查询 ==========
+
+message PoolAddressesReq {
+  repeated string pool_addresses = 1;
+}
+
+message PoolTokenReq {
+  string base_token = 1;
+  optional string quote_token = 2;
+}
+
+message Pool {
+  string pool_address = 1;
+  uint32 dex = 2;
+  string token_address = 3;
+  string quote_address = 4;
+  string token_account = 5;
+  string quote_account = 6;
+  uint32 create_at = 7;
+  uint32 update_at = 8;
+}
+
+message PoolResult {
+  string pool_address = 1;
+  optional Pool pool = 2;
+}
+
+message PoolListResp {
+  repeated PoolResult results = 1;
+}
+
+message PoolResp {
+  repeated Pool pools = 1;
+}
+
+// ========== gRPC Service ==========
+
+service IngestQueryService {
+  // =====================
+  // Event 事件查询接口
+  // =====================
+
+  rpc QueryEventsByIDs(EventIDsReq) returns (EventListResp); // 按输入顺序原样返回
+  rpc QueryEventsByUser(UserEventReq) returns (EventResp);
+  rpc QueryEventsByPool(PoolEventReq) returns (EventResp);
+
+  // ======================
+  // Balance 查询接口
+  // ======================
+
+  rpc QueryTopHoldersByToken(TokenTopReq) returns (HolderListResp);
+  rpc QueryHolderCountByToken(TokenReq) returns (HolderCountResp);
+
+  rpc QueryBalancesByOwner(OwnerReq) returns (BalanceResp);
+  rpc QueryBalancesByAccounts(AccountsReq) returns (BalanceListResp); // 按输入顺序原样返回
+
+  // ======================
+  // Pool 查询接口
+  // ======================
+
+  rpc QueryPoolsByAddresses(PoolAddressesReq) returns (PoolListResp); // 按输入顺序原样返回
+  rpc QueryPoolsByToken(PoolTokenReq) returns (PoolResp);
+}
