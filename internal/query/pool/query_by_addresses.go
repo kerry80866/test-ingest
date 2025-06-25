@@ -50,7 +50,6 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 		args[i] = addr
 	}
 
-	// 执行查询
 	rows, err := s.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		logger.Errorf("QueryPoolsByAddresses query failed: %v", err)
@@ -58,8 +57,8 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 	}
 	defer rows.Close()
 
-	// 构建 pool_address -> Pool 映射
-	poolMap := make(map[string]*pb.Pool, len(addresses))
+	// 构建 pool_address -> []*Pool 映射
+	poolMap := make(map[string][]*pb.Pool, len(addresses))
 	for rows.Next() {
 		p := &pb.Pool{}
 		if err := rows.Scan(
@@ -71,7 +70,7 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 		}
 		p.TokenAddress = utils.DecodeTokenAddress(p.TokenAddress)
 		p.QuoteAddress = utils.DecodeTokenAddress(p.QuoteAddress)
-		poolMap[p.PoolAddress] = p
+		poolMap[p.PoolAddress] = append(poolMap[p.PoolAddress], p)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -79,12 +78,16 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 		return nil, status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
 	}
 
-	// 按请求顺序构建结果
+	// 构建结果
 	results := make([]*pb.PoolResult, 0, len(addresses))
 	for _, addr := range addresses {
-		pr := &pb.PoolResult{PoolAddress: addr}
-		if p, ok := poolMap[addr]; ok {
-			pr.Pool = p
+		pools := poolMap[addr]
+		if pools == nil {
+			pools = make([]*pb.Pool, 0) // 👈 显式设为空数组，避免 nil
+		}
+		pr := &pb.PoolResult{
+			PoolAddress: addr,
+			Pools:       pools,
 		}
 		results = append(results, pr)
 	}

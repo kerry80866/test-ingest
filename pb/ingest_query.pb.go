@@ -1260,7 +1260,7 @@ func (x *Pool) GetUpdateAt() uint32 {
 type PoolResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PoolAddress   string                 `protobuf:"bytes,1,opt,name=pool_address,json=poolAddress,proto3" json:"pool_address,omitempty"`
-	Pool          *Pool                  `protobuf:"bytes,2,opt,name=pool,proto3,oneof" json:"pool,omitempty"`
+	Pools         []*Pool                `protobuf:"bytes,2,rep,name=pools,proto3" json:"pools,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1302,9 +1302,9 @@ func (x *PoolResult) GetPoolAddress() string {
 	return ""
 }
 
-func (x *PoolResult) GetPool() *Pool {
+func (x *PoolResult) GetPools() []*Pool {
 	if x != nil {
-		return x.Pool
+		return x.Pools
 	}
 	return nil
 }
@@ -1505,12 +1505,11 @@ const file_ingest_query_proto_rawDesc = "" +
 	"\rtoken_account\x18\x05 \x01(\tR\ftokenAccount\x12#\n" +
 	"\rquote_account\x18\x06 \x01(\tR\fquoteAccount\x12\x1b\n" +
 	"\tcreate_at\x18\a \x01(\rR\bcreateAt\x12\x1b\n" +
-	"\tupdate_at\x18\b \x01(\rR\bupdateAt\"[\n" +
+	"\tupdate_at\x18\b \x01(\rR\bupdateAt\"O\n" +
 	"\n" +
 	"PoolResult\x12!\n" +
-	"\fpool_address\x18\x01 \x01(\tR\vpoolAddress\x12!\n" +
-	"\x04pool\x18\x02 \x01(\v2\b.pb.PoolH\x00R\x04pool\x88\x01\x01B\a\n" +
-	"\x05_pool\"8\n" +
+	"\fpool_address\x18\x01 \x01(\tR\vpoolAddress\x12\x1e\n" +
+	"\x05pools\x18\x02 \x03(\v2\b.pb.PoolR\x05pools\"8\n" +
 	"\fPoolListResp\x12(\n" +
 	"\aresults\x18\x01 \x03(\v2\x0e.pb.PoolResultR\aresults\"*\n" +
 	"\bPoolResp\x12\x1e\n" +
@@ -1573,7 +1572,7 @@ var file_ingest_query_proto_depIdxs = []int32{
 	12, // 4: pb.BalanceListResp.results:type_name -> pb.BalanceResult
 	11, // 5: pb.BalanceResp.balances:type_name -> pb.Balance
 	15, // 6: pb.HolderListResp.holders:type_name -> pb.Holder
-	20, // 7: pb.PoolResult.pool:type_name -> pb.Pool
+	20, // 7: pb.PoolResult.pools:type_name -> pb.Pool
 	21, // 8: pb.PoolListResp.results:type_name -> pb.PoolResult
 	20, // 9: pb.PoolResp.pools:type_name -> pb.Pool
 	0,  // 10: pb.IngestQueryService.QueryEventsByIDs:input_type -> pb.EventIDsReq
@@ -1613,7 +1612,6 @@ func file_ingest_query_proto_init() {
 	file_ingest_query_proto_msgTypes[9].OneofWrappers = []any{}
 	file_ingest_query_proto_msgTypes[12].OneofWrappers = []any{}
 	file_ingest_query_proto_msgTypes[19].OneofWrappers = []any{}
-	file_ingest_query_proto_msgTypes[21].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

@@ -144,7 +144,7 @@ message Pool {
 
 message PoolResult {
   string pool_address = 1;
-  optional Pool pool = 2;
+  repeated Pool pools = 2;
 }
 
 message PoolListResp {
