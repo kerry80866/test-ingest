@@ -170,10 +170,9 @@ func testQueryPoolsByAddresses(client pb.IngestQueryServiceClient) {
 	}
 	log.Printf("PoolsByAddresses result:")
 	for _, pr := range resp.Results {
-		if pr.Pool != nil {
-			log.Printf("pool_address=%s token=%s quote=%s", pr.PoolAddress, pr.Pool.TokenAddress, pr.Pool.QuoteAddress)
-		} else {
-			log.Printf("pool_address=%s pool=nil", pr.PoolAddress)
+		for _, p := range pr.Pools {
+			log.Printf("token=%s quote=%s tokenAccount=%s quoteAccount=%s",
+				p.TokenAddress, p.QuoteAddress, p.TokenAccount, p.QuoteAccount)
 		}
 	}
 }
