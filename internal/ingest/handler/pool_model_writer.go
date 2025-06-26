@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dex-ingest-sol/internal/ingest/model"
+	"dex-ingest-sol/internal/pkg/db"
 	"dex-ingest-sol/internal/pkg/logger"
 	"fmt"
 	"runtime/debug"
@@ -18,7 +19,7 @@ const (
 
 var poolValuePlaceholder = "(" + strings.Repeat("?,", poolUpsertFieldCount-1) + "?)"
 
-func InsertPools(ctx context.Context, db *sql.DB, pools []*model.Pool) (err error) {
+func InsertPools(ctx context.Context, dbConn *sql.DB, pools []*model.Pool) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Errorf("InsertPools panic: %v\n%s", r, debug.Stack())
@@ -61,8 +62,16 @@ func InsertPools(ctx context.Context, db *sql.DB, pools []*model.Pool) (err erro
 		builder.WriteString(" ON DUPLICATE KEY IGNORE")
 
 		query := builder.String()
-		if _, err := db.ExecContext(ctx, query, args...); err != nil {
-			return fmt.Errorf("insert pool [%d:%d] failed: %w", i, end, err)
+		retryRange := fmt.Sprintf("[%d:%d]", i, end)
+		err = db.RetryWithBackoff(ctx, 10, func() error {
+			_, execErr := dbConn.ExecContext(ctx, query, args...)
+			if execErr != nil {
+				logger.Warnf("retrying pool insert %s: %v", retryRange, execErr)
+			}
+			return execErr
+		})
+		if err != nil {
+			return fmt.Errorf("insert pool %s failed after retries: %w", retryRange, err)
 		}
 	}
 

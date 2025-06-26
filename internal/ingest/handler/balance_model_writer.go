@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"dex-ingest-sol/internal/ingest/model"
+	"dex-ingest-sol/internal/pkg/db"
+	"dex-ingest-sol/internal/pkg/logger"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 )
@@ -93,6 +96,7 @@ func insertOrUpdateBalances(ctx context.Context, db *sql.DB, balances []*model.B
 func deleteBalances(ctx context.Context, db *sql.DB, balances []*model.Balance, isRealTime bool) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			logger.Errorf("deleteBalances panic: %v\n%s", r, debug.Stack())
 			err = fmt.Errorf("deleteBalances panic recovered: %v", r)
 		}
 	}()
@@ -116,7 +120,7 @@ func updateBalancesHistorical(ctx context.Context, db *sql.DB, balances []*model
 	return upsertBalancesRealtime(ctx, db, toUpsert)
 }
 
-func upsertBalancesRealtime(ctx context.Context, db *sql.DB, balances []*model.Balance) error {
+func upsertBalancesRealtime(ctx context.Context, dbConn *sql.DB, balances []*model.Balance) error {
 	total := len(balances)
 	if total == 0 {
 		return nil
@@ -150,8 +154,17 @@ func upsertBalancesRealtime(ctx context.Context, db *sql.DB, balances []*model.B
 		}
 
 		query := builder.String()
-		if _, err := db.ExecContext(ctx, query, args...); err != nil {
-			return fmt.Errorf("upsert balance [%d:%d] failed: %w (first account: %s)", i, end, err, batch[0].AccountAddress)
+
+		retryRange := fmt.Sprintf("[%d:%d]", i, end)
+		err := db.RetryWithBackoff(ctx, 10, func() error {
+			_, execErr := dbConn.ExecContext(ctx, query, args...)
+			if execErr != nil {
+				logger.Warnf("retrying balance upsert %s: %v", retryRange, execErr)
+			}
+			return execErr
+		})
+		if err != nil {
+			return fmt.Errorf("upsert balance %s failed after retries: %w (first account: %s)", retryRange, err, batch[0].AccountAddress)
 		}
 	}
 
@@ -171,7 +184,7 @@ func deleteBalancesHistorical(ctx context.Context, db *sql.DB, balances []*model
 	return deleteBalancesRealtime(ctx, db, toDelete)
 }
 
-func deleteBalancesRealtime(ctx context.Context, db *sql.DB, balances []*model.Balance) error {
+func deleteBalancesRealtime(ctx context.Context, dbConn *sql.DB, balances []*model.Balance) error {
 	if len(balances) == 0 {
 		return nil
 	}
@@ -193,15 +206,23 @@ func deleteBalancesRealtime(ctx context.Context, db *sql.DB, balances []*model.B
 		placeholders = placeholders[:len(placeholders)-1] // 去掉最后一个逗号
 		query := "DELETE FROM balance WHERE account_address IN (" + placeholders + ")"
 
-		if _, err := db.ExecContext(ctx, query, args...); err != nil {
-			return fmt.Errorf("deleteBalancesRealtime [%d:%d] failed: %w (first account: %s)", i, end, err, batch[0].AccountAddress)
+		retryRange := fmt.Sprintf("[%d:%d]", i, end)
+		err := db.RetryWithBackoff(ctx, 10, func() error {
+			_, execErr := dbConn.ExecContext(ctx, query, args...)
+			if execErr != nil {
+				logger.Warnf("retrying balance delete %s: %v", retryRange, execErr)
+			}
+			return execErr
+		})
+		if err != nil {
+			return fmt.Errorf("deleteBalancesRealtime %s failed after retries: %w (first account: %s)", retryRange, err, batch[0].AccountAddress)
 		}
 	}
 	return nil
 }
 
 // filterBalancesByLastEventID 查询已有 last_event_id，返回需要执行操作的 balances（isDelete 表示是否为删除操作）
-func filterBalancesByLastEventID(ctx context.Context, db *sql.DB, balances []*model.Balance, isDelete bool) ([]*model.Balance, error) {
+func filterBalancesByLastEventID(ctx context.Context, dbConn *sql.DB, balances []*model.Balance, isDelete bool) ([]*model.Balance, error) {
 	if len(balances) == 0 {
 		return nil, nil
 	}
@@ -232,21 +253,27 @@ func filterBalancesByLastEventID(ctx context.Context, db *sql.DB, balances []*mo
 			args[j] = addr
 		}
 
-		rows, err := db.QueryContext(ctx, query, args...)
-		if err != nil {
-			return nil, fmt.Errorf("select existing balances failed: %w", err)
-		}
-
-		var addr string
-		var lastID int64
-		for rows.Next() {
-			if err := rows.Scan(&addr, &lastID); err != nil {
-				rows.Close()
-				return nil, fmt.Errorf("scan existing balance failed: %w", err)
+		err := db.RetryWithBackoff(ctx, 10, func() error {
+			rows, queryErr := dbConn.QueryContext(ctx, query, args...)
+			if queryErr != nil {
+				logger.Warnf("retrying select balances [%d:%d]: %v", i, end, queryErr)
+				return queryErr
 			}
-			existing[addr] = lastID
+			defer rows.Close()
+
+			var addr string
+			var lastID int64
+			for rows.Next() {
+				if scanErr := rows.Scan(&addr, &lastID); scanErr != nil {
+					return fmt.Errorf("scan error in [%d:%d]: %w", i, end, scanErr)
+				}
+				existing[addr] = lastID
+			}
+			return rows.Err()
+		})
+		if err != nil {
+			return nil, err
 		}
-		rows.Close()
 	}
 
 	// 根据 last_event_id 判断是否需要处理

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dex-ingest-sol/internal/ingest/model"
+	"dex-ingest-sol/internal/pkg/db"
 	"dex-ingest-sol/internal/pkg/logger"
 	"fmt"
 	"github.com/redis/go-redis/v9"
@@ -60,7 +61,7 @@ func InsertChainEvents(ctx context.Context, db *sql.DB, events []*model.ChainEve
 	return firstErr
 }
 
-func insertChainEventsSerial(ctx context.Context, db *sql.DB, events []*model.ChainEvent) (err error) {
+func insertChainEventsSerial(ctx context.Context, dbConn *sql.DB, events []*model.ChainEvent) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Errorf("insertChainEventsSerial panic: %v\n%s", r, debug.Stack())
@@ -103,8 +104,17 @@ func insertChainEventsSerial(ctx context.Context, db *sql.DB, events []*model.Ch
 		}
 
 		query := builder.String()
-		if _, err := db.ExecContext(ctx, query, args...); err != nil {
-			return fmt.Errorf("insert chain_event [%d:%d] failed: %w", i, end, err)
+		retryRange := fmt.Sprintf("[%d:%d]", i, end)
+
+		err = db.RetryWithBackoff(ctx, 10, func() error {
+			_, execErr := dbConn.ExecContext(ctx, query, args...)
+			if execErr != nil {
+				logger.Warnf("retrying chain_event insert %s: %v", retryRange, execErr)
+			}
+			return execErr
+		})
+		if err != nil {
+			return fmt.Errorf("insert chain_event %s failed after retries: %w", retryRange, err)
 		}
 	}
 	return nil

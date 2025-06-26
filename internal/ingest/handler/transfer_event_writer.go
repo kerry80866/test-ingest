@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"dex-ingest-sol/internal/ingest/model"
+	"dex-ingest-sol/internal/pkg/db"
 	"dex-ingest-sol/internal/pkg/logger"
 	"fmt"
 	"runtime/debug"
@@ -19,7 +20,7 @@ const (
 
 var transferEventsValuePlaceholder = "(" + strings.Repeat("?,", transferEventsUpsertFieldCount-1) + "?)"
 
-func InsertTransferEvents(ctx context.Context, db *sql.DB, events []*model.TransferEvent) error {
+func InsertTransferEvents(ctx context.Context, dbConn *sql.DB, events []*model.TransferEvent) error {
 	if len(events) == 0 {
 		return nil
 	}
@@ -45,24 +46,26 @@ func InsertTransferEvents(ctx context.Context, db *sql.DB, events []*model.Trans
 		batch := events[i:end]
 
 		wg.Add(1)
-		go func(evts []*model.TransferEvent) {
+		go func(start, end int, evts []*model.TransferEvent) {
 			defer wg.Done()
-			if err := insertTransferEventsSerial(ctx, db, evts); err != nil {
+			if err := insertTransferEventsSerial(ctx, dbConn, evts, start, end); err != nil {
+				logger.Errorf("InsertTransferEvents batch [%d:%d] failed: %v", start, end, err)
 				once.Do(func() {
 					firstErr = err
 				})
 			}
-		}(batch)
+		}(i, end, batch)
 	}
 
 	wg.Wait()
 	return firstErr
 }
 
-func insertTransferEventsSerial(ctx context.Context, db *sql.DB, events []*model.TransferEvent) (err error) {
+// insertTransferEventsSerial 单批次插入 TransferEvent，带重试机制
+func insertTransferEventsSerial(ctx context.Context, dbConn *sql.DB, events []*model.TransferEvent, startIndex, endIndex int) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			logger.Errorf("insertTransferEventsSerial panic: %v\n%s", r, debug.Stack())
+			logger.Errorf("insertTransferEventsSerial panic [%d:%d]: %v\n%s", startIndex, endIndex, r, debug.Stack())
 			err = fmt.Errorf("insertTransferEventsSerial panic: %v", r)
 		}
 	}()
@@ -100,8 +103,17 @@ func insertTransferEventsSerial(ctx context.Context, db *sql.DB, events []*model
 		}
 
 		query := builder.String()
-		if _, err := db.ExecContext(ctx, query, args...); err != nil {
-			return fmt.Errorf("insert transfer_event [%d:%d] failed: %w", i, end, err)
+		retryRange := fmt.Sprintf("[%d:%d sub=%d:%d]", startIndex, endIndex, i, end)
+
+		err = db.RetryWithBackoff(ctx, 10, func() error {
+			_, execErr := dbConn.ExecContext(ctx, query, args...)
+			if execErr != nil {
+				logger.Warnf("retrying transfer_event insert %s: %v", retryRange, execErr)
+			}
+			return execErr
+		})
+		if err != nil {
+			return fmt.Errorf("insert transfer_event %s failed after retries: %w", retryRange, err)
 		}
 	}
 	return nil
