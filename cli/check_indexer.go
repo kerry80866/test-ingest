@@ -13,7 +13,7 @@ var tables = []string{
 	"balance",
 	"token",
 	"pool",
-	// 如有其他表可继续添加
+	"transfer_event",
 }
 
 func main() {
