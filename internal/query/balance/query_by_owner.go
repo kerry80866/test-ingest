@@ -7,6 +7,7 @@ import (
 	"dex-ingest-sol/pb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"strings"
 )
 
 func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.OwnerReq) (resp *pb.BalanceResp, err error) {
@@ -38,8 +39,13 @@ func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.
 		args  []any
 	)
 
-	if req.TokenAddress != nil && *req.TokenAddress != "" {
-		tokenID := utils.EncodeTokenAddress(*req.TokenAddress)
+	tokenAddr := ""
+	if req.TokenAddress != nil {
+		tokenAddr = strings.TrimSpace(*req.TokenAddress)
+	}
+
+	if tokenAddr != "" {
+		tokenID := utils.EncodeTokenAddress(tokenAddr)
 		query = `
 			SELECT account_address, token_address, balance
 			FROM balance

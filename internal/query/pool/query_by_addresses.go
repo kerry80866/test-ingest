@@ -83,13 +83,12 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 	for _, addr := range addresses {
 		pools := poolMap[addr]
 		if pools == nil {
-			pools = make([]*pb.Pool, 0) // 👈 显式设为空数组，避免 nil
+			pools = make([]*pb.Pool, 0) // 显式设为空数组，避免 nil
 		}
-		pr := &pb.PoolResult{
+		results = append(results, &pb.PoolResult{
 			PoolAddress: addr,
 			Pools:       pools,
-		}
-		results = append(results, pr)
+		})
 	}
 
 	return &pb.PoolListResp{Results: results}, nil

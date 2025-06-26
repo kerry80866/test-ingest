@@ -21,9 +21,59 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 转账事件查询类型，表示查询方向
+type TransferQueryType int32
+
+const (
+	TransferQueryType_ALL         TransferQueryType = 0 // 查询所有转账事件，from_wallet 或 to_wallet 任意匹配
+	TransferQueryType_FROM_WALLET TransferQueryType = 1 // 仅查询 from_wallet 等于 user_wallet 的事件
+	TransferQueryType_TO_WALLET   TransferQueryType = 2 // 仅查询 to_wallet 等于 user_wallet 的事件
+)
+
+// Enum value maps for TransferQueryType.
+var (
+	TransferQueryType_name = map[int32]string{
+		0: "ALL",
+		1: "FROM_WALLET",
+		2: "TO_WALLET",
+	}
+	TransferQueryType_value = map[string]int32{
+		"ALL":         0,
+		"FROM_WALLET": 1,
+		"TO_WALLET":   2,
+	}
+)
+
+func (x TransferQueryType) Enum() *TransferQueryType {
+	p := new(TransferQueryType)
+	*p = x
+	return p
+}
+
+func (x TransferQueryType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TransferQueryType) Descriptor() protoreflect.EnumDescriptor {
+	return file_ingest_query_proto_enumTypes[0].Descriptor()
+}
+
+func (TransferQueryType) Type() protoreflect.EnumType {
+	return &file_ingest_query_proto_enumTypes[0]
+}
+
+func (x TransferQueryType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TransferQueryType.Descriptor instead.
+func (TransferQueryType) EnumDescriptor() ([]byte, []int) {
+	return file_ingest_query_proto_rawDescGZIP(), []int{0}
+}
+
 type EventIDsReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	EventIds      []uint64               `protobuf:"varint,1,rep,packed,name=event_ids,json=eventIds,proto3" json:"event_ids,omitempty"`
+	EventIds      []uint64               `protobuf:"varint,1,rep,packed,name=event_ids,json=eventIds,proto3" json:"event_ids,omitempty"` // 事件ID列表，批量查询用
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -163,10 +213,10 @@ func (x *EventListResp) GetResults() []*ChainEventResult {
 
 type UserEventReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserWallet    string                 `protobuf:"bytes,1,opt,name=user_wallet,json=userWallet,proto3" json:"user_wallet,omitempty"`
-	EventType     []uint32               `protobuf:"varint,2,rep,packed,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
-	EventId       *uint64                `protobuf:"varint,3,opt,name=event_id,json=eventId,proto3,oneof" json:"event_id,omitempty"`
-	Limit         *uint32                `protobuf:"varint,4,opt,name=limit,proto3,oneof" json:"limit,omitempty"` // 限制返回条数
+	UserWallet    string                 `protobuf:"bytes,1,opt,name=user_wallet,json=userWallet,proto3" json:"user_wallet,omitempty"`      // 用户地址，查询与该地址相关的事件
+	EventType     []uint32               `protobuf:"varint,2,rep,packed,name=event_type,json=eventType,proto3" json:"event_type,omitempty"` // 事件类型过滤，可多选，不传则查询全部
+	EventId       *uint64                `protobuf:"varint,3,opt,name=event_id,json=eventId,proto3,oneof" json:"event_id,omitempty"`        // 分页游标，查询 event_id 之前的数据（不含）
+	Limit         *uint32                `protobuf:"varint,4,opt,name=limit,proto3,oneof" json:"limit,omitempty"`                           // 限制返回条数，建议默认10-20，最大1000
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -231,10 +281,10 @@ func (x *UserEventReq) GetLimit() uint32 {
 
 type PoolEventReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PoolAddress   string                 `protobuf:"bytes,1,opt,name=pool_address,json=poolAddress,proto3" json:"pool_address,omitempty"`
-	EventType     []uint32               `protobuf:"varint,2,rep,packed,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
-	EventId       *uint64                `protobuf:"varint,3,opt,name=event_id,json=eventId,proto3,oneof" json:"event_id,omitempty"`
-	Limit         *uint32                `protobuf:"varint,4,opt,name=limit,proto3,oneof" json:"limit,omitempty"` // 限制返回条数
+	PoolAddress   string                 `protobuf:"bytes,1,opt,name=pool_address,json=poolAddress,proto3" json:"pool_address,omitempty"`   // 池子地址
+	EventType     []uint32               `protobuf:"varint,2,rep,packed,name=event_type,json=eventType,proto3" json:"event_type,omitempty"` // 事件类型过滤
+	EventId       *uint64                `protobuf:"varint,3,opt,name=event_id,json=eventId,proto3,oneof" json:"event_id,omitempty"`        // 分页游标
+	Limit         *uint32                `protobuf:"varint,4,opt,name=limit,proto3,oneof" json:"limit,omitempty"`                           // 限制返回条数
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -303,15 +353,15 @@ type ChainEvent struct {
 	EventId       uint64                 `protobuf:"varint,2,opt,name=event_id,json=eventId,proto3" json:"event_id,omitempty"`
 	EventType     uint32                 `protobuf:"varint,3,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
 	Dex           uint32                 `protobuf:"varint,4,opt,name=dex,proto3" json:"dex,omitempty"`
-	UserWallet    string                 `protobuf:"bytes,5,opt,name=user_wallet,json=userWallet,proto3" json:"user_wallet,omitempty"`
-	ToWallet      string                 `protobuf:"bytes,6,opt,name=to_wallet,json=toWallet,proto3" json:"to_wallet,omitempty"`
+	UserWallet    string                 `protobuf:"bytes,5,opt,name=user_wallet,json=userWallet,proto3" json:"user_wallet,omitempty"` // 交易发起者地址，等同于 from_wallet
+	ToWallet      string                 `protobuf:"bytes,6,opt,name=to_wallet,json=toWallet,proto3" json:"to_wallet,omitempty"`       // 交易接收者地址
 	PoolAddress   string                 `protobuf:"bytes,7,opt,name=pool_address,json=poolAddress,proto3" json:"pool_address,omitempty"`
 	Token         string                 `protobuf:"bytes,8,opt,name=token,proto3" json:"token,omitempty"`
 	QuoteToken    string                 `protobuf:"bytes,9,opt,name=quote_token,json=quoteToken,proto3" json:"quote_token,omitempty"`
 	TokenAmount   uint64                 `protobuf:"varint,10,opt,name=token_amount,json=tokenAmount,proto3" json:"token_amount,omitempty"`
 	QuoteAmount   uint64                 `protobuf:"varint,11,opt,name=quote_amount,json=quoteAmount,proto3" json:"quote_amount,omitempty"`
-	VolumeUsd     float64                `protobuf:"fixed64,12,opt,name=volume_usd,json=volumeUsd,proto3" json:"volume_usd,omitempty"`
-	PriceUsd      float64                `protobuf:"fixed64,13,opt,name=price_usd,json=priceUsd,proto3" json:"price_usd,omitempty"`
+	VolumeUsd     float64                `protobuf:"fixed64,12,opt,name=volume_usd,json=volumeUsd,proto3" json:"volume_usd,omitempty"` // 估算的美元交易量
+	PriceUsd      float64                `protobuf:"fixed64,13,opt,name=price_usd,json=priceUsd,proto3" json:"price_usd,omitempty"`    // 估算的美元价格
 	TxHash        string                 `protobuf:"bytes,14,opt,name=tx_hash,json=txHash,proto3" json:"tx_hash,omitempty"`
 	Signer        string                 `protobuf:"bytes,15,opt,name=signer,proto3" json:"signer,omitempty"`
 	BlockTime     uint32                 `protobuf:"varint,16,opt,name=block_time,json=blockTime,proto3" json:"block_time,omitempty"`
@@ -513,6 +563,74 @@ func (x *EventResp) GetEvents() []*ChainEvent {
 	return nil
 }
 
+type TransferEventQueryReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserWallet    string                 `protobuf:"bytes,1,opt,name=user_wallet,json=userWallet,proto3" json:"user_wallet,omitempty"`                         // 要查询的用户地址
+	QueryType     TransferQueryType      `protobuf:"varint,2,opt,name=query_type,json=queryType,proto3,enum=pb.TransferQueryType" json:"query_type,omitempty"` // 查询类型：from_wallet / to_wallet / all
+	EventId       *uint64                `protobuf:"varint,3,opt,name=event_id,json=eventId,proto3,oneof" json:"event_id,omitempty"`                           // 分页游标，查询 event_id 之前的数据
+	Limit         *uint32                `protobuf:"varint,4,opt,name=limit,proto3,oneof" json:"limit,omitempty"`                                              // 返回条数限制
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TransferEventQueryReq) Reset() {
+	*x = TransferEventQueryReq{}
+	mi := &file_ingest_query_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TransferEventQueryReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TransferEventQueryReq) ProtoMessage() {}
+
+func (x *TransferEventQueryReq) ProtoReflect() protoreflect.Message {
+	mi := &file_ingest_query_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TransferEventQueryReq.ProtoReflect.Descriptor instead.
+func (*TransferEventQueryReq) Descriptor() ([]byte, []int) {
+	return file_ingest_query_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *TransferEventQueryReq) GetUserWallet() string {
+	if x != nil {
+		return x.UserWallet
+	}
+	return ""
+}
+
+func (x *TransferEventQueryReq) GetQueryType() TransferQueryType {
+	if x != nil {
+		return x.QueryType
+	}
+	return TransferQueryType_ALL
+}
+
+func (x *TransferEventQueryReq) GetEventId() uint64 {
+	if x != nil && x.EventId != nil {
+		return *x.EventId
+	}
+	return 0
+}
+
+func (x *TransferEventQueryReq) GetLimit() uint32 {
+	if x != nil && x.Limit != nil {
+		return *x.Limit
+	}
+	return 0
+}
+
 type TokenReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TokenAddress  string                 `protobuf:"bytes,1,opt,name=token_address,json=tokenAddress,proto3" json:"token_address,omitempty"`
@@ -522,7 +640,7 @@ type TokenReq struct {
 
 func (x *TokenReq) Reset() {
 	*x = TokenReq{}
-	mi := &file_ingest_query_proto_msgTypes[7]
+	mi := &file_ingest_query_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -534,7 +652,7 @@ func (x *TokenReq) String() string {
 func (*TokenReq) ProtoMessage() {}
 
 func (x *TokenReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[7]
+	mi := &file_ingest_query_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -547,7 +665,7 @@ func (x *TokenReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TokenReq.ProtoReflect.Descriptor instead.
 func (*TokenReq) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{7}
+	return file_ingest_query_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *TokenReq) GetTokenAddress() string {
@@ -567,7 +685,7 @@ type TokenTopReq struct {
 
 func (x *TokenTopReq) Reset() {
 	*x = TokenTopReq{}
-	mi := &file_ingest_query_proto_msgTypes[8]
+	mi := &file_ingest_query_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -579,7 +697,7 @@ func (x *TokenTopReq) String() string {
 func (*TokenTopReq) ProtoMessage() {}
 
 func (x *TokenTopReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[8]
+	mi := &file_ingest_query_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -592,7 +710,7 @@ func (x *TokenTopReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TokenTopReq.ProtoReflect.Descriptor instead.
 func (*TokenTopReq) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{8}
+	return file_ingest_query_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TokenTopReq) GetTokenAddress() string {
@@ -619,7 +737,7 @@ type OwnerReq struct {
 
 func (x *OwnerReq) Reset() {
 	*x = OwnerReq{}
-	mi := &file_ingest_query_proto_msgTypes[9]
+	mi := &file_ingest_query_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -631,7 +749,7 @@ func (x *OwnerReq) String() string {
 func (*OwnerReq) ProtoMessage() {}
 
 func (x *OwnerReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[9]
+	mi := &file_ingest_query_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -644,7 +762,7 @@ func (x *OwnerReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OwnerReq.ProtoReflect.Descriptor instead.
 func (*OwnerReq) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{9}
+	return file_ingest_query_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *OwnerReq) GetOwnerAddress() string {
@@ -670,7 +788,7 @@ type AccountsReq struct {
 
 func (x *AccountsReq) Reset() {
 	*x = AccountsReq{}
-	mi := &file_ingest_query_proto_msgTypes[10]
+	mi := &file_ingest_query_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -682,7 +800,7 @@ func (x *AccountsReq) String() string {
 func (*AccountsReq) ProtoMessage() {}
 
 func (x *AccountsReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[10]
+	mi := &file_ingest_query_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -695,7 +813,7 @@ func (x *AccountsReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AccountsReq.ProtoReflect.Descriptor instead.
 func (*AccountsReq) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{10}
+	return file_ingest_query_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AccountsReq) GetAccounts() []string {
@@ -718,7 +836,7 @@ type Balance struct {
 
 func (x *Balance) Reset() {
 	*x = Balance{}
-	mi := &file_ingest_query_proto_msgTypes[11]
+	mi := &file_ingest_query_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -730,7 +848,7 @@ func (x *Balance) String() string {
 func (*Balance) ProtoMessage() {}
 
 func (x *Balance) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[11]
+	mi := &file_ingest_query_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -743,7 +861,7 @@ func (x *Balance) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Balance.ProtoReflect.Descriptor instead.
 func (*Balance) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{11}
+	return file_ingest_query_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Balance) GetAccountAddress() string {
@@ -791,7 +909,7 @@ type BalanceResult struct {
 
 func (x *BalanceResult) Reset() {
 	*x = BalanceResult{}
-	mi := &file_ingest_query_proto_msgTypes[12]
+	mi := &file_ingest_query_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -803,7 +921,7 @@ func (x *BalanceResult) String() string {
 func (*BalanceResult) ProtoMessage() {}
 
 func (x *BalanceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[12]
+	mi := &file_ingest_query_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -816,7 +934,7 @@ func (x *BalanceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BalanceResult.ProtoReflect.Descriptor instead.
 func (*BalanceResult) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{12}
+	return file_ingest_query_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *BalanceResult) GetAccountAddress() string {
@@ -842,7 +960,7 @@ type BalanceListResp struct {
 
 func (x *BalanceListResp) Reset() {
 	*x = BalanceListResp{}
-	mi := &file_ingest_query_proto_msgTypes[13]
+	mi := &file_ingest_query_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -854,7 +972,7 @@ func (x *BalanceListResp) String() string {
 func (*BalanceListResp) ProtoMessage() {}
 
 func (x *BalanceListResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[13]
+	mi := &file_ingest_query_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -867,7 +985,7 @@ func (x *BalanceListResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BalanceListResp.ProtoReflect.Descriptor instead.
 func (*BalanceListResp) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{13}
+	return file_ingest_query_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *BalanceListResp) GetResults() []*BalanceResult {
@@ -886,7 +1004,7 @@ type BalanceResp struct {
 
 func (x *BalanceResp) Reset() {
 	*x = BalanceResp{}
-	mi := &file_ingest_query_proto_msgTypes[14]
+	mi := &file_ingest_query_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -898,7 +1016,7 @@ func (x *BalanceResp) String() string {
 func (*BalanceResp) ProtoMessage() {}
 
 func (x *BalanceResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[14]
+	mi := &file_ingest_query_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -911,7 +1029,7 @@ func (x *BalanceResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BalanceResp.ProtoReflect.Descriptor instead.
 func (*BalanceResp) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{14}
+	return file_ingest_query_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *BalanceResp) GetBalances() []*Balance {
@@ -931,7 +1049,7 @@ type Holder struct {
 
 func (x *Holder) Reset() {
 	*x = Holder{}
-	mi := &file_ingest_query_proto_msgTypes[15]
+	mi := &file_ingest_query_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -943,7 +1061,7 @@ func (x *Holder) String() string {
 func (*Holder) ProtoMessage() {}
 
 func (x *Holder) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[15]
+	mi := &file_ingest_query_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -956,7 +1074,7 @@ func (x *Holder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Holder.ProtoReflect.Descriptor instead.
 func (*Holder) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{15}
+	return file_ingest_query_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *Holder) GetOwnerAddress() string {
@@ -982,7 +1100,7 @@ type HolderListResp struct {
 
 func (x *HolderListResp) Reset() {
 	*x = HolderListResp{}
-	mi := &file_ingest_query_proto_msgTypes[16]
+	mi := &file_ingest_query_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -994,7 +1112,7 @@ func (x *HolderListResp) String() string {
 func (*HolderListResp) ProtoMessage() {}
 
 func (x *HolderListResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[16]
+	mi := &file_ingest_query_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1007,7 +1125,7 @@ func (x *HolderListResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HolderListResp.ProtoReflect.Descriptor instead.
 func (*HolderListResp) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{16}
+	return file_ingest_query_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *HolderListResp) GetHolders() []*Holder {
@@ -1026,7 +1144,7 @@ type HolderCountResp struct {
 
 func (x *HolderCountResp) Reset() {
 	*x = HolderCountResp{}
-	mi := &file_ingest_query_proto_msgTypes[17]
+	mi := &file_ingest_query_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1038,7 +1156,7 @@ func (x *HolderCountResp) String() string {
 func (*HolderCountResp) ProtoMessage() {}
 
 func (x *HolderCountResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[17]
+	mi := &file_ingest_query_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1051,7 +1169,7 @@ func (x *HolderCountResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HolderCountResp.ProtoReflect.Descriptor instead.
 func (*HolderCountResp) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{17}
+	return file_ingest_query_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *HolderCountResp) GetCount() uint64 {
@@ -1070,7 +1188,7 @@ type PoolAddressesReq struct {
 
 func (x *PoolAddressesReq) Reset() {
 	*x = PoolAddressesReq{}
-	mi := &file_ingest_query_proto_msgTypes[18]
+	mi := &file_ingest_query_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1082,7 +1200,7 @@ func (x *PoolAddressesReq) String() string {
 func (*PoolAddressesReq) ProtoMessage() {}
 
 func (x *PoolAddressesReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[18]
+	mi := &file_ingest_query_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1095,7 +1213,7 @@ func (x *PoolAddressesReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolAddressesReq.ProtoReflect.Descriptor instead.
 func (*PoolAddressesReq) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{18}
+	return file_ingest_query_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *PoolAddressesReq) GetPoolAddresses() []string {
@@ -1115,7 +1233,7 @@ type PoolTokenReq struct {
 
 func (x *PoolTokenReq) Reset() {
 	*x = PoolTokenReq{}
-	mi := &file_ingest_query_proto_msgTypes[19]
+	mi := &file_ingest_query_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1127,7 +1245,7 @@ func (x *PoolTokenReq) String() string {
 func (*PoolTokenReq) ProtoMessage() {}
 
 func (x *PoolTokenReq) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[19]
+	mi := &file_ingest_query_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1140,7 +1258,7 @@ func (x *PoolTokenReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolTokenReq.ProtoReflect.Descriptor instead.
 func (*PoolTokenReq) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{19}
+	return file_ingest_query_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PoolTokenReq) GetBaseToken() string {
@@ -1173,7 +1291,7 @@ type Pool struct {
 
 func (x *Pool) Reset() {
 	*x = Pool{}
-	mi := &file_ingest_query_proto_msgTypes[20]
+	mi := &file_ingest_query_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1185,7 +1303,7 @@ func (x *Pool) String() string {
 func (*Pool) ProtoMessage() {}
 
 func (x *Pool) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[20]
+	mi := &file_ingest_query_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1198,7 +1316,7 @@ func (x *Pool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pool.ProtoReflect.Descriptor instead.
 func (*Pool) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{20}
+	return file_ingest_query_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Pool) GetPoolAddress() string {
@@ -1267,7 +1385,7 @@ type PoolResult struct {
 
 func (x *PoolResult) Reset() {
 	*x = PoolResult{}
-	mi := &file_ingest_query_proto_msgTypes[21]
+	mi := &file_ingest_query_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1279,7 +1397,7 @@ func (x *PoolResult) String() string {
 func (*PoolResult) ProtoMessage() {}
 
 func (x *PoolResult) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[21]
+	mi := &file_ingest_query_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1292,7 +1410,7 @@ func (x *PoolResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolResult.ProtoReflect.Descriptor instead.
 func (*PoolResult) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{21}
+	return file_ingest_query_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *PoolResult) GetPoolAddress() string {
@@ -1318,7 +1436,7 @@ type PoolListResp struct {
 
 func (x *PoolListResp) Reset() {
 	*x = PoolListResp{}
-	mi := &file_ingest_query_proto_msgTypes[22]
+	mi := &file_ingest_query_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1330,7 +1448,7 @@ func (x *PoolListResp) String() string {
 func (*PoolListResp) ProtoMessage() {}
 
 func (x *PoolListResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[22]
+	mi := &file_ingest_query_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1343,7 +1461,7 @@ func (x *PoolListResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolListResp.ProtoReflect.Descriptor instead.
 func (*PoolListResp) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{22}
+	return file_ingest_query_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *PoolListResp) GetResults() []*PoolResult {
@@ -1362,7 +1480,7 @@ type PoolResp struct {
 
 func (x *PoolResp) Reset() {
 	*x = PoolResp{}
-	mi := &file_ingest_query_proto_msgTypes[23]
+	mi := &file_ingest_query_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1374,7 +1492,7 @@ func (x *PoolResp) String() string {
 func (*PoolResp) ProtoMessage() {}
 
 func (x *PoolResp) ProtoReflect() protoreflect.Message {
-	mi := &file_ingest_query_proto_msgTypes[23]
+	mi := &file_ingest_query_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1387,7 +1505,7 @@ func (x *PoolResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PoolResp.ProtoReflect.Descriptor instead.
 func (*PoolResp) Descriptor() ([]byte, []int) {
-	return file_ingest_query_proto_rawDescGZIP(), []int{23}
+	return file_ingest_query_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *PoolResp) GetPools() []*Pool {
@@ -1453,7 +1571,16 @@ const file_ingest_query_proto_rawDesc = "" +
 	"block_time\x18\x10 \x01(\rR\tblockTime\x12\x1b\n" +
 	"\tcreate_at\x18\x11 \x01(\rR\bcreateAt\"3\n" +
 	"\tEventResp\x12&\n" +
-	"\x06events\x18\x01 \x03(\v2\x0e.pb.ChainEventR\x06events\"/\n" +
+	"\x06events\x18\x01 \x03(\v2\x0e.pb.ChainEventR\x06events\"\xc0\x01\n" +
+	"\x15TransferEventQueryReq\x12\x1f\n" +
+	"\vuser_wallet\x18\x01 \x01(\tR\n" +
+	"userWallet\x124\n" +
+	"\n" +
+	"query_type\x18\x02 \x01(\x0e2\x15.pb.TransferQueryTypeR\tqueryType\x12\x1e\n" +
+	"\bevent_id\x18\x03 \x01(\x04H\x00R\aeventId\x88\x01\x01\x12\x19\n" +
+	"\x05limit\x18\x04 \x01(\rH\x01R\x05limit\x88\x01\x01B\v\n" +
+	"\t_event_idB\b\n" +
+	"\x06_limit\"/\n" +
 	"\bTokenReq\x12#\n" +
 	"\rtoken_address\x18\x01 \x01(\tR\ftokenAddress\"W\n" +
 	"\vTokenTopReq\x12#\n" +
@@ -1513,11 +1640,16 @@ const file_ingest_query_proto_rawDesc = "" +
 	"\fPoolListResp\x12(\n" +
 	"\aresults\x18\x01 \x03(\v2\x0e.pb.PoolResultR\aresults\"*\n" +
 	"\bPoolResp\x12\x1e\n" +
-	"\x05pools\x18\x01 \x03(\v2\b.pb.PoolR\x05pools2\xa3\x04\n" +
+	"\x05pools\x18\x01 \x03(\v2\b.pb.PoolR\x05pools*<\n" +
+	"\x11TransferQueryType\x12\a\n" +
+	"\x03ALL\x10\x00\x12\x0f\n" +
+	"\vFROM_WALLET\x10\x01\x12\r\n" +
+	"\tTO_WALLET\x10\x022\xe4\x04\n" +
 	"\x12IngestQueryService\x126\n" +
 	"\x10QueryEventsByIDs\x12\x0f.pb.EventIDsReq\x1a\x11.pb.EventListResp\x124\n" +
 	"\x11QueryEventsByUser\x12\x10.pb.UserEventReq\x1a\r.pb.EventResp\x124\n" +
-	"\x11QueryEventsByPool\x12\x10.pb.PoolEventReq\x1a\r.pb.EventResp\x12=\n" +
+	"\x11QueryEventsByPool\x12\x10.pb.PoolEventReq\x1a\r.pb.EventResp\x12?\n" +
+	"\x13QueryTransferEvents\x12\x19.pb.TransferEventQueryReq\x1a\r.pb.EventResp\x12=\n" +
 	"\x16QueryTopHoldersByToken\x12\x0f.pb.TokenTopReq\x1a\x12.pb.HolderListResp\x12<\n" +
 	"\x17QueryHolderCountByToken\x12\f.pb.TokenReq\x1a\x13.pb.HolderCountResp\x125\n" +
 	"\x14QueryBalancesByOwner\x12\f.pb.OwnerReq\x1a\x0f.pb.BalanceResp\x12?\n" +
@@ -1537,67 +1669,73 @@ func file_ingest_query_proto_rawDescGZIP() []byte {
 	return file_ingest_query_proto_rawDescData
 }
 
-var file_ingest_query_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_ingest_query_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_ingest_query_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_ingest_query_proto_goTypes = []any{
-	(*EventIDsReq)(nil),      // 0: pb.EventIDsReq
-	(*ChainEventResult)(nil), // 1: pb.ChainEventResult
-	(*EventListResp)(nil),    // 2: pb.EventListResp
-	(*UserEventReq)(nil),     // 3: pb.UserEventReq
-	(*PoolEventReq)(nil),     // 4: pb.PoolEventReq
-	(*ChainEvent)(nil),       // 5: pb.ChainEvent
-	(*EventResp)(nil),        // 6: pb.EventResp
-	(*TokenReq)(nil),         // 7: pb.TokenReq
-	(*TokenTopReq)(nil),      // 8: pb.TokenTopReq
-	(*OwnerReq)(nil),         // 9: pb.OwnerReq
-	(*AccountsReq)(nil),      // 10: pb.AccountsReq
-	(*Balance)(nil),          // 11: pb.Balance
-	(*BalanceResult)(nil),    // 12: pb.BalanceResult
-	(*BalanceListResp)(nil),  // 13: pb.BalanceListResp
-	(*BalanceResp)(nil),      // 14: pb.BalanceResp
-	(*Holder)(nil),           // 15: pb.Holder
-	(*HolderListResp)(nil),   // 16: pb.HolderListResp
-	(*HolderCountResp)(nil),  // 17: pb.HolderCountResp
-	(*PoolAddressesReq)(nil), // 18: pb.PoolAddressesReq
-	(*PoolTokenReq)(nil),     // 19: pb.PoolTokenReq
-	(*Pool)(nil),             // 20: pb.Pool
-	(*PoolResult)(nil),       // 21: pb.PoolResult
-	(*PoolListResp)(nil),     // 22: pb.PoolListResp
-	(*PoolResp)(nil),         // 23: pb.PoolResp
+	(TransferQueryType)(0),        // 0: pb.TransferQueryType
+	(*EventIDsReq)(nil),           // 1: pb.EventIDsReq
+	(*ChainEventResult)(nil),      // 2: pb.ChainEventResult
+	(*EventListResp)(nil),         // 3: pb.EventListResp
+	(*UserEventReq)(nil),          // 4: pb.UserEventReq
+	(*PoolEventReq)(nil),          // 5: pb.PoolEventReq
+	(*ChainEvent)(nil),            // 6: pb.ChainEvent
+	(*EventResp)(nil),             // 7: pb.EventResp
+	(*TransferEventQueryReq)(nil), // 8: pb.TransferEventQueryReq
+	(*TokenReq)(nil),              // 9: pb.TokenReq
+	(*TokenTopReq)(nil),           // 10: pb.TokenTopReq
+	(*OwnerReq)(nil),              // 11: pb.OwnerReq
+	(*AccountsReq)(nil),           // 12: pb.AccountsReq
+	(*Balance)(nil),               // 13: pb.Balance
+	(*BalanceResult)(nil),         // 14: pb.BalanceResult
+	(*BalanceListResp)(nil),       // 15: pb.BalanceListResp
+	(*BalanceResp)(nil),           // 16: pb.BalanceResp
+	(*Holder)(nil),                // 17: pb.Holder
+	(*HolderListResp)(nil),        // 18: pb.HolderListResp
+	(*HolderCountResp)(nil),       // 19: pb.HolderCountResp
+	(*PoolAddressesReq)(nil),      // 20: pb.PoolAddressesReq
+	(*PoolTokenReq)(nil),          // 21: pb.PoolTokenReq
+	(*Pool)(nil),                  // 22: pb.Pool
+	(*PoolResult)(nil),            // 23: pb.PoolResult
+	(*PoolListResp)(nil),          // 24: pb.PoolListResp
+	(*PoolResp)(nil),              // 25: pb.PoolResp
 }
 var file_ingest_query_proto_depIdxs = []int32{
-	5,  // 0: pb.ChainEventResult.event:type_name -> pb.ChainEvent
-	1,  // 1: pb.EventListResp.results:type_name -> pb.ChainEventResult
-	5,  // 2: pb.EventResp.events:type_name -> pb.ChainEvent
-	11, // 3: pb.BalanceResult.balance:type_name -> pb.Balance
-	12, // 4: pb.BalanceListResp.results:type_name -> pb.BalanceResult
-	11, // 5: pb.BalanceResp.balances:type_name -> pb.Balance
-	15, // 6: pb.HolderListResp.holders:type_name -> pb.Holder
-	20, // 7: pb.PoolResult.pools:type_name -> pb.Pool
-	21, // 8: pb.PoolListResp.results:type_name -> pb.PoolResult
-	20, // 9: pb.PoolResp.pools:type_name -> pb.Pool
-	0,  // 10: pb.IngestQueryService.QueryEventsByIDs:input_type -> pb.EventIDsReq
-	3,  // 11: pb.IngestQueryService.QueryEventsByUser:input_type -> pb.UserEventReq
-	4,  // 12: pb.IngestQueryService.QueryEventsByPool:input_type -> pb.PoolEventReq
-	8,  // 13: pb.IngestQueryService.QueryTopHoldersByToken:input_type -> pb.TokenTopReq
-	7,  // 14: pb.IngestQueryService.QueryHolderCountByToken:input_type -> pb.TokenReq
-	9,  // 15: pb.IngestQueryService.QueryBalancesByOwner:input_type -> pb.OwnerReq
-	10, // 16: pb.IngestQueryService.QueryBalancesByAccounts:input_type -> pb.AccountsReq
-	18, // 17: pb.IngestQueryService.QueryPoolsByAddresses:input_type -> pb.PoolAddressesReq
-	19, // 18: pb.IngestQueryService.QueryPoolsByToken:input_type -> pb.PoolTokenReq
-	2,  // 19: pb.IngestQueryService.QueryEventsByIDs:output_type -> pb.EventListResp
-	6,  // 20: pb.IngestQueryService.QueryEventsByUser:output_type -> pb.EventResp
-	6,  // 21: pb.IngestQueryService.QueryEventsByPool:output_type -> pb.EventResp
-	16, // 22: pb.IngestQueryService.QueryTopHoldersByToken:output_type -> pb.HolderListResp
-	17, // 23: pb.IngestQueryService.QueryHolderCountByToken:output_type -> pb.HolderCountResp
-	14, // 24: pb.IngestQueryService.QueryBalancesByOwner:output_type -> pb.BalanceResp
-	13, // 25: pb.IngestQueryService.QueryBalancesByAccounts:output_type -> pb.BalanceListResp
-	22, // 26: pb.IngestQueryService.QueryPoolsByAddresses:output_type -> pb.PoolListResp
-	23, // 27: pb.IngestQueryService.QueryPoolsByToken:output_type -> pb.PoolResp
-	19, // [19:28] is the sub-list for method output_type
-	10, // [10:19] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	6,  // 0: pb.ChainEventResult.event:type_name -> pb.ChainEvent
+	2,  // 1: pb.EventListResp.results:type_name -> pb.ChainEventResult
+	6,  // 2: pb.EventResp.events:type_name -> pb.ChainEvent
+	0,  // 3: pb.TransferEventQueryReq.query_type:type_name -> pb.TransferQueryType
+	13, // 4: pb.BalanceResult.balance:type_name -> pb.Balance
+	14, // 5: pb.BalanceListResp.results:type_name -> pb.BalanceResult
+	13, // 6: pb.BalanceResp.balances:type_name -> pb.Balance
+	17, // 7: pb.HolderListResp.holders:type_name -> pb.Holder
+	22, // 8: pb.PoolResult.pools:type_name -> pb.Pool
+	23, // 9: pb.PoolListResp.results:type_name -> pb.PoolResult
+	22, // 10: pb.PoolResp.pools:type_name -> pb.Pool
+	1,  // 11: pb.IngestQueryService.QueryEventsByIDs:input_type -> pb.EventIDsReq
+	4,  // 12: pb.IngestQueryService.QueryEventsByUser:input_type -> pb.UserEventReq
+	5,  // 13: pb.IngestQueryService.QueryEventsByPool:input_type -> pb.PoolEventReq
+	8,  // 14: pb.IngestQueryService.QueryTransferEvents:input_type -> pb.TransferEventQueryReq
+	10, // 15: pb.IngestQueryService.QueryTopHoldersByToken:input_type -> pb.TokenTopReq
+	9,  // 16: pb.IngestQueryService.QueryHolderCountByToken:input_type -> pb.TokenReq
+	11, // 17: pb.IngestQueryService.QueryBalancesByOwner:input_type -> pb.OwnerReq
+	12, // 18: pb.IngestQueryService.QueryBalancesByAccounts:input_type -> pb.AccountsReq
+	20, // 19: pb.IngestQueryService.QueryPoolsByAddresses:input_type -> pb.PoolAddressesReq
+	21, // 20: pb.IngestQueryService.QueryPoolsByToken:input_type -> pb.PoolTokenReq
+	3,  // 21: pb.IngestQueryService.QueryEventsByIDs:output_type -> pb.EventListResp
+	7,  // 22: pb.IngestQueryService.QueryEventsByUser:output_type -> pb.EventResp
+	7,  // 23: pb.IngestQueryService.QueryEventsByPool:output_type -> pb.EventResp
+	7,  // 24: pb.IngestQueryService.QueryTransferEvents:output_type -> pb.EventResp
+	18, // 25: pb.IngestQueryService.QueryTopHoldersByToken:output_type -> pb.HolderListResp
+	19, // 26: pb.IngestQueryService.QueryHolderCountByToken:output_type -> pb.HolderCountResp
+	16, // 27: pb.IngestQueryService.QueryBalancesByOwner:output_type -> pb.BalanceResp
+	15, // 28: pb.IngestQueryService.QueryBalancesByAccounts:output_type -> pb.BalanceListResp
+	24, // 29: pb.IngestQueryService.QueryPoolsByAddresses:output_type -> pb.PoolListResp
+	25, // 30: pb.IngestQueryService.QueryPoolsByToken:output_type -> pb.PoolResp
+	21, // [21:31] is the sub-list for method output_type
+	11, // [11:21] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_ingest_query_proto_init() }
@@ -1608,22 +1746,24 @@ func file_ingest_query_proto_init() {
 	file_ingest_query_proto_msgTypes[1].OneofWrappers = []any{}
 	file_ingest_query_proto_msgTypes[3].OneofWrappers = []any{}
 	file_ingest_query_proto_msgTypes[4].OneofWrappers = []any{}
-	file_ingest_query_proto_msgTypes[8].OneofWrappers = []any{}
+	file_ingest_query_proto_msgTypes[7].OneofWrappers = []any{}
 	file_ingest_query_proto_msgTypes[9].OneofWrappers = []any{}
-	file_ingest_query_proto_msgTypes[12].OneofWrappers = []any{}
-	file_ingest_query_proto_msgTypes[19].OneofWrappers = []any{}
+	file_ingest_query_proto_msgTypes[10].OneofWrappers = []any{}
+	file_ingest_query_proto_msgTypes[13].OneofWrappers = []any{}
+	file_ingest_query_proto_msgTypes[20].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ingest_query_proto_rawDesc), len(file_ingest_query_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   24,
+			NumEnums:      1,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_ingest_query_proto_goTypes,
 		DependencyIndexes: file_ingest_query_proto_depIdxs,
+		EnumInfos:         file_ingest_query_proto_enumTypes,
 		MessageInfos:      file_ingest_query_proto_msgTypes,
 	}.Build()
 	File_ingest_query_proto = out.File

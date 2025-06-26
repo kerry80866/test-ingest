@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS chain_event (
 
      PRIMARY KEY (event_id_hash, event_id)
 )
-        WITH (CONSISTENCY = 'strong', MUTABILITY = 'IMMUTABLE_ROWS');
+        WITH (CONSISTENCY = 'strong', MUTABILITY = 'MUTABLE_LATEST');
 
 CREATE INDEX IF NOT EXISTS idx_user_token_type_id_desc
     ON chain_event(user_wallet, token, event_type, event_id DESC)

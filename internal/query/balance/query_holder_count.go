@@ -16,7 +16,6 @@ func (s *QueryBalanceService) QueryHolderCountByToken(ctx context.Context, req *
 		ErrCodePanic       = ErrCodeBase + 32
 		ErrCodeInvalidArg  = ErrCodeBase + 1
 		ErrCodeQueryFailed = ErrCodeBase + 2
-		ErrCodeInvalidData = ErrCodeBase + 3
 	)
 	defer func() {
 		if r := recover(); r != nil {
@@ -41,11 +40,6 @@ func (s *QueryBalanceService) QueryHolderCountByToken(ctx context.Context, req *
 	if err != nil {
 		logger.Errorf("QueryHolderCountByToken failed: token=%s, err=%v", token, err)
 		return nil, status.Errorf(codes.Internal, "[%d] query holder count failed", ErrCodeQueryFailed)
-	}
-
-	if count < 0 {
-		logger.Errorf("QueryHolderCountByToken: negative count %d for token=%s", count, token)
-		return nil, status.Errorf(codes.Internal, "[%d] invalid holder count", ErrCodeInvalidData)
 	}
 
 	return &pb.HolderCountResp{Count: uint64(count)}, nil

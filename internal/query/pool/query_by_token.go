@@ -45,10 +45,13 @@ func (s *QueryPoolService) QueryPoolsByToken(ctx context.Context, req *pb.PoolTo
 	`)
 	params = append(params, utils.EncodeTokenAddress(base))
 
-	if req.QuoteToken != nil && strings.TrimSpace(*req.QuoteToken) != "" {
-		quote := utils.EncodeTokenAddress(strings.TrimSpace(*req.QuoteToken))
-		query.WriteString(" AND quote_address = ?")
-		params = append(params, quote)
+	if req.QuoteToken != nil {
+		quoteToken := strings.TrimSpace(*req.QuoteToken)
+		if quoteToken != "" {
+			quote := utils.EncodeTokenAddress(quoteToken)
+			query.WriteString(" AND quote_address = ?")
+			params = append(params, quote)
+		}
 	}
 
 	query.WriteString(" ORDER BY pool_address")

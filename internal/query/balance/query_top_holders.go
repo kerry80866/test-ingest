@@ -64,6 +64,7 @@ func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *p
 	}
 	defer rows.Close()
 
+	// 多个账户地址可能属于同一个 owner，我们需要合并这些账户的余额，得到每个 owner 的总余额
 	holderMap := make(map[string]*pb.Holder)
 	for rows.Next() {
 		var owner string

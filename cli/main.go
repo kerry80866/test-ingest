@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS chain_event (
      create_at INT NOT NULL,
 
      PRIMARY KEY (event_id_hash, event_id)
-) WITH (CONSISTENCY = 'strong', MUTABILITY = 'IMMUTABLE_ROWS');
+) WITH (CONSISTENCY = 'strong', MUTABILITY = 'MUTABLE_LATEST');
 `,
 
 		`CREATE INDEX IF NOT EXISTS idx_user_type_id_desc
@@ -95,20 +95,28 @@ CREATE TABLE IF NOT EXISTS pool (
      WITH (INDEX_COVERED_TYPE = 'COVERED_ALL_COLUMNS_IN_SCHEMA');`,
 
 		`
-CREATE TABLE IF NOT EXISTS token (
-    token_address VARCHAR(44) NOT NULL,
+CREATE TABLE IF NOT EXISTS transfer_event (
+    event_id_hash INT NOT NULL,
+    event_id BIGINT NOT NULL,
+
+    from_wallet VARCHAR(44) NOT NULL,
+    to_wallet VARCHAR(44) NOT NULL,
+
+    token VARCHAR(44) NOT NULL,
+    amount DECIMAL(20, 0) NOT NULL,
     decimals SMALLINT NOT NULL,
-    source SMALLINT NOT NULL,
-    total_supply DECIMAL(20, 0) NOT NULL,
-    name VARCHAR(128) NOT NULL,
-    symbol VARCHAR(64) NOT NULL,
-    creator VARCHAR(44) NOT NULL,
-    uri VARCHAR(256) NOT NULL,
+
+    tx_hash VARCHAR(88) NOT NULL,
+    signer VARCHAR(44) NOT NULL,
+
+    block_time INT NOT NULL,
     create_at INT NOT NULL,
-    update_at INT NOT NULL,
-    PRIMARY KEY (token_address)
+
+    PRIMARY KEY (event_id_hash, event_id)
 ) WITH (CONSISTENCY = 'strong', MUTABILITY = 'MUTABLE_LATEST');
 `,
+		`CREATE INDEX IF NOT EXISTS idx_transfer_from_id_desc ON transfer_event(from_wallet, event_id DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_transfer_to_id_desc ON transfer_event(to_wallet, event_id DESC);`,
 	}
 
 	for i, stmt := range statements {

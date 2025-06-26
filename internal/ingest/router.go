@@ -87,7 +87,7 @@ func (r *PartitionRouter) Dispatch(msg *kafka.Message) {
 		now := time.Now().Unix()
 		last := r.lastLogTime.Load()
 		if now-last >= 15 && r.lastLogTime.CompareAndSwap(last, now) {
-			logger.Warnf("[partition=%d] message dropped or blocked, channel full", partition)
+			logger.Warnf("[partition=%d] message blocked, channel full", partition)
 		}
 		ch <- msg
 	}

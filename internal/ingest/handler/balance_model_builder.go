@@ -24,7 +24,7 @@ func buildBalanceModel(event *pb.BalanceUpdateEvent, cache *lru.Cache) *model.Ba
 		AccountAddress: utils.EncodeBase58Strict(cache, event.Account),
 		OwnerAddress:   utils.EncodeBase58Strict(cache, event.Owner),
 		TokenAddress:   utils.EncodeBase58Strict(cache, event.Token),
-		Balance:        utils.Uint64ToDecimal(event.PostBalance),
+		Balance:        utils.Uint64ToString(event.PostBalance),
 		LastEventID:    int64(event.EventId),
 	}
 }

@@ -22,6 +22,7 @@ const (
 	IngestQueryService_QueryEventsByIDs_FullMethodName        = "/pb.IngestQueryService/QueryEventsByIDs"
 	IngestQueryService_QueryEventsByUser_FullMethodName       = "/pb.IngestQueryService/QueryEventsByUser"
 	IngestQueryService_QueryEventsByPool_FullMethodName       = "/pb.IngestQueryService/QueryEventsByPool"
+	IngestQueryService_QueryTransferEvents_FullMethodName     = "/pb.IngestQueryService/QueryTransferEvents"
 	IngestQueryService_QueryTopHoldersByToken_FullMethodName  = "/pb.IngestQueryService/QueryTopHoldersByToken"
 	IngestQueryService_QueryHolderCountByToken_FullMethodName = "/pb.IngestQueryService/QueryHolderCountByToken"
 	IngestQueryService_QueryBalancesByOwner_FullMethodName    = "/pb.IngestQueryService/QueryBalancesByOwner"
@@ -37,6 +38,7 @@ type IngestQueryServiceClient interface {
 	QueryEventsByIDs(ctx context.Context, in *EventIDsReq, opts ...grpc.CallOption) (*EventListResp, error)
 	QueryEventsByUser(ctx context.Context, in *UserEventReq, opts ...grpc.CallOption) (*EventResp, error)
 	QueryEventsByPool(ctx context.Context, in *PoolEventReq, opts ...grpc.CallOption) (*EventResp, error)
+	QueryTransferEvents(ctx context.Context, in *TransferEventQueryReq, opts ...grpc.CallOption) (*EventResp, error)
 	QueryTopHoldersByToken(ctx context.Context, in *TokenTopReq, opts ...grpc.CallOption) (*HolderListResp, error)
 	QueryHolderCountByToken(ctx context.Context, in *TokenReq, opts ...grpc.CallOption) (*HolderCountResp, error)
 	QueryBalancesByOwner(ctx context.Context, in *OwnerReq, opts ...grpc.CallOption) (*BalanceResp, error)
@@ -77,6 +79,16 @@ func (c *ingestQueryServiceClient) QueryEventsByPool(ctx context.Context, in *Po
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EventResp)
 	err := c.cc.Invoke(ctx, IngestQueryService_QueryEventsByPool_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ingestQueryServiceClient) QueryTransferEvents(ctx context.Context, in *TransferEventQueryReq, opts ...grpc.CallOption) (*EventResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EventResp)
+	err := c.cc.Invoke(ctx, IngestQueryService_QueryTransferEvents_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -150,6 +162,7 @@ type IngestQueryServiceServer interface {
 	QueryEventsByIDs(context.Context, *EventIDsReq) (*EventListResp, error)
 	QueryEventsByUser(context.Context, *UserEventReq) (*EventResp, error)
 	QueryEventsByPool(context.Context, *PoolEventReq) (*EventResp, error)
+	QueryTransferEvents(context.Context, *TransferEventQueryReq) (*EventResp, error)
 	QueryTopHoldersByToken(context.Context, *TokenTopReq) (*HolderListResp, error)
 	QueryHolderCountByToken(context.Context, *TokenReq) (*HolderCountResp, error)
 	QueryBalancesByOwner(context.Context, *OwnerReq) (*BalanceResp, error)
@@ -174,6 +187,9 @@ func (UnimplementedIngestQueryServiceServer) QueryEventsByUser(context.Context, 
 }
 func (UnimplementedIngestQueryServiceServer) QueryEventsByPool(context.Context, *PoolEventReq) (*EventResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryEventsByPool not implemented")
+}
+func (UnimplementedIngestQueryServiceServer) QueryTransferEvents(context.Context, *TransferEventQueryReq) (*EventResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method QueryTransferEvents not implemented")
 }
 func (UnimplementedIngestQueryServiceServer) QueryTopHoldersByToken(context.Context, *TokenTopReq) (*HolderListResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method QueryTopHoldersByToken not implemented")
@@ -264,6 +280,24 @@ func _IngestQueryService_QueryEventsByPool_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IngestQueryServiceServer).QueryEventsByPool(ctx, req.(*PoolEventReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IngestQueryService_QueryTransferEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TransferEventQueryReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IngestQueryServiceServer).QueryTransferEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IngestQueryService_QueryTransferEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IngestQueryServiceServer).QueryTransferEvents(ctx, req.(*TransferEventQueryReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -394,6 +428,10 @@ var IngestQueryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "QueryEventsByPool",
 			Handler:    _IngestQueryService_QueryEventsByPool_Handler,
+		},
+		{
+			MethodName: "QueryTransferEvents",
+			Handler:    _IngestQueryService_QueryTransferEvents_Handler,
 		},
 		{
 			MethodName: "QueryTopHoldersByToken",

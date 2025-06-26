@@ -55,6 +55,10 @@ func (s *QueryService) QueryEventsByPool(ctx context.Context, req *pb.PoolEventR
 	return s.chainEventService.QueryEventsByPool(ctx, req)
 }
 
+func (s *QueryService) QueryTransferEvents(ctx context.Context, req *pb.TransferEventQueryReq) (*pb.EventResp, error) {
+	return s.chainEventService.QueryTransferEvents(ctx, req)
+}
+
 // Pool 相关
 func (s *QueryService) QueryPoolsByAddresses(ctx context.Context, req *pb.PoolAddressesReq) (resp *pb.PoolListResp, err error) {
 	return s.poolService.QueryPoolsByAddresses(ctx, req)

@@ -7,7 +7,7 @@ import (
 	"github.com/hashicorp/golang-lru"
 )
 
-// BuildChainEventModels 从 pb.Events 中提取标准 ChainEvent 模型（支持 Trade / Transfer / Liquidity / Mint / Burn）
+// BuildChainEventModels 从 pb.Events 中提取标准 ChainEvent 模型（支持 Trade / Liquidity / Mint / Burn）
 func BuildChainEventModels(events *pb.Events, cache *lru.Cache) []*model.ChainEvent {
 	var result = make([]*model.ChainEvent, 0, len(events.Events))
 	for _, e := range events.Events {
@@ -15,8 +15,6 @@ func BuildChainEventModels(events *pb.Events, cache *lru.Cache) []*model.ChainEv
 		switch inner := e.Event.(type) {
 		case *pb.Event_Trade:
 			ev = buildTradeEvent(inner.Trade, cache)
-		case *pb.Event_Transfer:
-			ev = buildTransferEvent(inner.Transfer, cache)
 		case *pb.Event_Liquidity:
 			ev = buildLiquidityEvent(inner.Liquidity, cache)
 		case *pb.Event_Mint:
@@ -47,40 +45,13 @@ func buildTradeEvent(event *pb.TradeEvent, cache *lru.Cache) *model.ChainEvent {
 		Token:       utils.EncodeBase58Strict(cache, event.Token),
 		QuoteToken:  utils.EncodeBase58Strict(cache, event.QuoteToken),
 
-		TokenAmount: utils.Uint64ToDecimal(event.TokenAmount),
-		QuoteAmount: utils.Uint64ToDecimal(event.QuoteTokenAmount),
+		TokenAmount: utils.Uint64ToString(event.TokenAmount),
+		QuoteAmount: utils.Uint64ToString(event.QuoteTokenAmount),
 		VolumeUsd:   event.AmountUsd,
 		PriceUsd:    event.PriceUsd,
 
 		TxHash: utils.TxHashToString(event.TxHash),
 		Signer: utils.EncodeBase58Optional(cache, utils.SelectSigner(event.Signers, event.UserWallet)),
-
-		BlockTime: int32(event.BlockTime),
-		CreateAt:  0,
-	}
-}
-
-func buildTransferEvent(event *pb.TransferEvent, cache *lru.Cache) *model.ChainEvent {
-	return &model.ChainEvent{
-		EventIDHash: utils.EventIdHash(event.EventId),
-		EventID:     int64(event.EventId),
-		EventType:   int16(event.Type),
-		Dex:         int16(0),
-
-		UserWallet: utils.EncodeBase58Strict(cache, event.SrcWallet),
-		ToWallet:   utils.EncodeBase58Strict(cache, event.DestWallet),
-
-		PoolAddress: "",
-		Token:       utils.EncodeBase58Strict(cache, event.Token),
-		QuoteToken:  "",
-
-		TokenAmount: utils.Uint64ToDecimal(event.Amount),
-		QuoteAmount: "0",
-		VolumeUsd:   0,
-		PriceUsd:    0,
-
-		TxHash: utils.TxHashToString(event.TxHash),
-		Signer: utils.EncodeBase58Optional(cache, utils.SelectSigner(event.Signers, event.SrcWallet)),
 
 		BlockTime: int32(event.BlockTime),
 		CreateAt:  0,
@@ -101,8 +72,8 @@ func buildLiquidityEvent(event *pb.LiquidityEvent, cache *lru.Cache) *model.Chai
 		Token:       utils.EncodeBase58Strict(cache, event.Token),
 		QuoteToken:  utils.EncodeBase58Strict(cache, event.QuoteToken),
 
-		TokenAmount: utils.Uint64ToDecimal(event.TokenAmount),
-		QuoteAmount: utils.Uint64ToDecimal(event.QuoteTokenAmount),
+		TokenAmount: utils.Uint64ToString(event.TokenAmount),
+		QuoteAmount: utils.Uint64ToString(event.QuoteTokenAmount),
 		VolumeUsd:   0,
 		PriceUsd:    0,
 
@@ -128,7 +99,7 @@ func buildMintEvent(event *pb.MintToEvent, cache *lru.Cache) *model.ChainEvent {
 		Token:       utils.EncodeBase58Strict(cache, event.Token),
 		QuoteToken:  "",
 
-		TokenAmount: utils.Uint64ToDecimal(event.Amount),
+		TokenAmount: utils.Uint64ToString(event.Amount),
 		QuoteAmount: "0",
 		VolumeUsd:   0,
 		PriceUsd:    0,
@@ -155,7 +126,7 @@ func buildBurnEvent(event *pb.BurnEvent, cache *lru.Cache) *model.ChainEvent {
 		Token:       utils.EncodeBase58Strict(cache, event.Token),
 		QuoteToken:  "",
 
-		TokenAmount: utils.Uint64ToDecimal(event.Amount),
+		TokenAmount: utils.Uint64ToString(event.Amount),
 		QuoteAmount: "0",
 		VolumeUsd:   0,
 		PriceUsd:    0,

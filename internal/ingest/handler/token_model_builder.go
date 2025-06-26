@@ -63,7 +63,7 @@ func BuildTokenModels(events *pb.Events, cache *lru.Cache) []*model.Token {
 				TokenAddress: tokenStr,
 				Decimals:     int16(t.Decimals),
 				Source:       int16(t.Dex),
-				TotalSupply:  utils.Uint64ToDecimal(t.TotalSupply),
+				TotalSupply:  utils.Uint64ToString(t.TotalSupply),
 				Name:         truncate("name", t.Name, maxNameLen, tokenStr),
 				Symbol:       truncate("symbol", t.Symbol, maxSymbolLen, tokenStr),
 				URI:          truncate("uri", t.Uri, maxUriLen, tokenStr),

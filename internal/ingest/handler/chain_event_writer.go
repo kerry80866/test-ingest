@@ -27,7 +27,7 @@ func InsertChainEvents(ctx context.Context, db *sql.DB, events []*model.ChainEve
 	eventsCount := len(events)
 
 	batchSize := 100
-	maxWorkers := 10
+	maxWorkers := 6
 
 	if len(events) > batchSize*maxWorkers {
 		// ceil(eventsCount / workers)：将 events 平均分配给 workers 个批次

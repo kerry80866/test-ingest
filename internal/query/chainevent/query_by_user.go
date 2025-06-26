@@ -85,7 +85,7 @@ func (s *QueryChainEventService) QueryEventsByUser(ctx context.Context, req *pb.
 	}
 
 	// 游标翻页（event_id < 上一页最小值）
-	if req.EventId != nil {
+	if req.EventId != nil && *req.EventId != 0 {
 		query.WriteString(" AND event_id < ?")
 		params = append(params, *req.EventId)
 	}
@@ -128,6 +128,7 @@ func (s *QueryChainEventService) QueryEventsByUser(ctx context.Context, req *pb.
 		if ev.Signer == "" {
 			ev.Signer = ev.UserWallet
 		}
+		ev.EventIdHash = uint32(utils.EventIdHash(ev.EventId))
 		ev.TokenAmount = utils.ParseUint64(tokenAmount)
 		ev.QuoteAmount = utils.ParseUint64(quoteAmount)
 		ev.Token = utils.DecodeTokenAddress(ev.Token)

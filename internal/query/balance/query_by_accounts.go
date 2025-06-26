@@ -27,7 +27,7 @@ func (s *QueryBalanceService) QueryBalancesByAccounts(ctx context.Context, req *
 		}
 	}()
 
-	const maxAccounts = 200
+	const maxAccounts = 2000
 
 	accounts := req.Accounts
 	if len(accounts) == 0 {
@@ -82,11 +82,10 @@ func (s *QueryBalanceService) QueryBalancesByAccounts(ctx context.Context, req *
 	// 按请求顺序构建结果
 	results := make([]*pb.BalanceResult, 0, len(accounts))
 	for _, addr := range accounts {
-		br := &pb.BalanceResult{AccountAddress: addr}
-		if bal, ok := balanceMap[addr]; ok {
-			br.Balance = bal
-		}
-		results = append(results, br)
+		results = append(results, &pb.BalanceResult{
+			AccountAddress: addr,
+			Balance:        balanceMap[addr],
+		})
 	}
 
 	return &pb.BalanceListResp{Results: results}, nil

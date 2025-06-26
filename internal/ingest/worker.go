@@ -23,13 +23,13 @@ const BLOCKBATCH_BUFFER = 10
 
 // BlockBatch 表示按 slot 聚合的一批数据，包含事件和对象
 type BlockBatch struct {
-	Slot     uint64
-	IsGrpc   bool                // 是否为 gRPC 实时推送（false 表示补块）
-	Messages []*kafka.Message    // Kafka 原始消息
-	Balances []*model.Balance    // 构建的链上事件
-	Events   []*model.ChainEvent // 构建的链上事件
-	Pools    []*model.Pool       // 新增池子（如建池）
-	Tokens   []*model.Token      // 新增 token（如首次初始化）
+	Slot      uint64
+	IsGrpc    bool                   // 是否为 gRPC 实时推送（false 表示补块）
+	Messages  []*kafka.Message       // Kafka 原始消息
+	Balances  []*model.Balance       // Balance
+	Events    []*model.ChainEvent    // 普通事件
+	Pools     []*model.Pool          // 新增池子
+	Transfers []*model.TransferEvent // Transfer事件
 }
 
 // WorkerContext 表示每个分区独立处理上下文
@@ -162,9 +162,6 @@ func (w *WorkerContext) flushIfNeeded() {
 	// 内存控制：每 100 次强制复制剩余数据，防止底层数组持续增长
 	if w.flushCounter%100 == 0 {
 		remain := len(w.BatchQueue) - flushCount
-		if remain < 0 {
-			remain = 0
-		}
 		newCap := remain + BLOCKBATCH_BUFFER
 		w.BatchQueue = append(make([]*BlockBatch, 0, newCap), w.BatchQueue[flushCount:]...)
 	} else {
@@ -209,7 +206,8 @@ func buildBlockBatch(routerType RouterType, partition int32, msg *kafka.Message,
 	events := &pb.Events{}
 	err := proto.Unmarshal(msg.Value, events)
 	if err != nil {
-		logger.Errorf("failed to unmarshal kafka message: %v", err)
+		logger.Errorf("[router=%v partition=%d offset=%v topic=%s] failed to unmarshal kafka message: %v",
+			routerType, partition, msg.TopicPartition.Offset, *msg.TopicPartition.Topic, err)
 		return nil
 	}
 	if len(events.Events) == 0 {
@@ -227,7 +225,7 @@ func buildBlockBatch(routerType RouterType, partition int32, msg *kafka.Message,
 	case RouterEvent:
 		batch.Events = handler.BuildChainEventModels(events, cache)
 		batch.Pools = handler.BuildPoolModels(events, cache)
-		batch.Tokens = handler.BuildTokenModels(events, cache)
+		batch.Transfers = handler.BuildTransferEventModels(events, cache)
 	case RouterBalance:
 		batch.Balances = handler.BuildBalanceModels(events, cache)
 	}
@@ -255,37 +253,37 @@ func (w *WorkerContext) flushBatches(batches []*BlockBatch) uint64 {
 }
 
 func (w *WorkerContext) flushEventBatches(batches []*BlockBatch) {
-	var eventCount, poolCount, tokenCount int
+	var eventCount, poolCount, transferCount int
 
 	// 第一次遍历：统计容量
 	for _, b := range batches {
 		eventCount += len(b.Events)
 		poolCount += len(b.Pools)
-		tokenCount += len(b.Tokens)
+		transferCount += len(b.Transfers)
 	}
 
 	// 分配内存
-	allEvents := make([]*model.ChainEvent, 0, eventCount)
+	chainEvents := make([]*model.ChainEvent, 0, eventCount)
 	pools := make([]*model.Pool, 0, poolCount)
-	tokens := make([]*model.Token, 0, tokenCount)
+	transferEvents := make([]*model.TransferEvent, 0, transferCount)
 
 	// 第二次遍历：聚合数据
 	for _, b := range batches {
-		allEvents = append(allEvents, b.Events...)
+		chainEvents = append(chainEvents, b.Events...)
 		pools = append(pools, b.Pools...)
-		tokens = append(tokens, b.Tokens...)
+		transferEvents = append(transferEvents, b.Transfers...)
 	}
 
 	var wg sync.WaitGroup
 
 	// 写入 ChainEvent
-	if len(allEvents) > 0 {
+	if len(chainEvents) > 0 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			start := time.Now()
-			if err := handler.InsertChainEvents(w.ctx, w.DB, allEvents); err != nil {
-				logger.Errorf("[partition=%d] insertEvents error: %v", w.Partition, err)
+			if err := handler.InsertChainEvents(w.ctx, w.DB, chainEvents); err != nil {
+				logger.Errorf("[partition=%d] insertChainEvents error: %v", w.Partition, err)
 			}
 			logger.Infof("[partition=%d] insertChainEvents done in %s", w.Partition, time.Since(start))
 		}()
@@ -295,7 +293,7 @@ func (w *WorkerContext) flushEventBatches(batches []*BlockBatch) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if err := handler.SyncPoolCache(w.ctx, w.Redis, allEvents); err != nil {
+				if err := handler.SyncPoolCache(w.ctx, w.Redis, chainEvents); err != nil {
 					logger.Errorf("[partition=%d] sync pool cache error: %v", w.Partition, err)
 				}
 			}()
@@ -312,6 +310,19 @@ func (w *WorkerContext) flushEventBatches(batches []*BlockBatch) {
 				logger.Errorf("[partition=%d] insertPools error: %v", w.Partition, err)
 			}
 			logger.Infof("[partition=%d] insertPools done in %s", w.Partition, time.Since(start))
+		}()
+	}
+
+	// 写入 TransferEvent
+	if len(transferEvents) > 0 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			start := time.Now()
+			if err := handler.InsertTransferEvents(w.ctx, w.DB, transferEvents); err != nil {
+				logger.Errorf("[partition=%d] insertTransferEvents error: %v", w.Partition, err)
+			}
+			logger.Infof("[partition=%d] insertTransferEvents done in %s", w.Partition, time.Since(start))
 		}()
 	}
 
