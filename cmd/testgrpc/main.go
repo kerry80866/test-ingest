@@ -261,7 +261,7 @@ func testQueryPoolsByToken(client pb.IngestQueryServiceClient) {
 	// 调用 QueryBalancesByAccounts 查询余额
 	start1 := time.Now()
 	balanceResp, err := client.QueryBalancesByAccounts(ctx, &pb.AccountsReq{
-		Accounts: accounts[:200],
+		Accounts: accounts,
 	})
 	duration1 := time.Since(start1)
 	log.Printf("QueryBalancesByAccounts took: %s", duration1)
