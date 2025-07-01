@@ -71,15 +71,6 @@ func insertPoolsSerial(ctx context.Context, dbConn *sql.DB, pools []*model.Pool,
 	total := len(pools)
 	estimatedRowSQLSize := len(poolValuePlaceholder) + 32
 
-	const upsertSQL = " ON DUPLICATE KEY UPDATE " +
-		"token_account=VALUES(token_account)," +
-		"quote_account=VALUES(quote_account)," +
-		"dex=VALUES(dex)," +
-		"token_address=VALUES(token_address)," +
-		"quote_address=VALUES(quote_address)," +
-		"update_at=VALUES(update_at)," +
-		"create_at=IF(create_at=0, VALUES(create_at), create_at)"
-
 	for i := 0; i < total; i += poolBatchSize {
 		end := i + poolBatchSize
 		if end > total {
@@ -106,7 +97,7 @@ func insertPoolsSerial(ctx context.Context, dbConn *sql.DB, pools []*model.Pool,
 			)
 		}
 
-		builder.WriteString(upsertSQL)
+		builder.WriteString(" ON DUPLICATE KEY IGNORE")
 
 		query := builder.String()
 		retryRange := fmt.Sprintf("[%d:%d]", startIndex+i, startIndex+end)
