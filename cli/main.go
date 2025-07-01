@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS chain_event (
 CREATE TABLE IF NOT EXISTS pool (
     pool_address VARCHAR(44) NOT NULL,
     dex SMALLINT NOT NULL,
+    account_key BIGINT NOT NULL,
     token_address VARCHAR(44) NOT NULL,
     quote_address VARCHAR(44) NOT NULL,
     token_account VARCHAR(44) NOT NULL,
