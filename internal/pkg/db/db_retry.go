@@ -18,6 +18,7 @@ func RetryWithBackoff(ctx context.Context, maxRetries int, op func() error) erro
 		1 * time.Second,
 		2 * time.Second,
 		5 * time.Second,
+		10 * time.Second,
 	}
 
 	var err error

@@ -2,6 +2,7 @@ package model
 
 type Pool struct {
 	PoolAddress  string
+	AccountKey   int64
 	Dex          int16
 	TokenAddress string
 	QuoteAddress string

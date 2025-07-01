@@ -7,27 +7,58 @@ import (
 	"github.com/hashicorp/golang-lru"
 )
 
-func BuildPoolModels(events *pb.Events, cache *lru.Cache) []*model.Pool {
+func BuildPoolModels(events *pb.Events, tokenCache *lru.Cache, poolCache *PoolCache) []*model.Pool {
 	initialCap := max(10, len(events.Events)/3)
 	result := make([]*model.Pool, 0, initialCap)
 	for _, e := range events.Events {
-		event, ok := e.Event.(*pb.Event_Liquidity)
-		if !ok || event.Liquidity == nil {
+		var p *model.Pool
+		switch inner := e.Event.(type) {
+		case *pb.Event_Trade:
+			p = buildPoolModel(inner.Trade, tokenCache, poolCache)
+		case *pb.Event_Liquidity:
+			p = buildPoolModelFromLiquidity(inner.Liquidity, tokenCache, poolCache)
+
+		default:
 			continue
 		}
-		result = append(result, buildPoolModel(event.Liquidity, cache))
+		if p != nil {
+			result = append(result, p)
+		}
 	}
 	return result
 }
 
-func buildPoolModel(event *pb.LiquidityEvent, cache *lru.Cache) *model.Pool {
+func buildPoolModel(event *pb.TradeEvent, tokenCache *lru.Cache, poolCache *PoolCache) *model.Pool {
+	accountKey, exists := poolCache.CheckAndInsert(event.PairAddress, event.TokenAccount, event.QuoteTokenAccount, event.Dex)
+	if exists {
+		return nil
+	}
 	return &model.Pool{
-		PoolAddress:  utils.EncodeBase58Strict(cache, event.PairAddress),
+		PoolAddress:  utils.EncodeBase58Strict(tokenCache, event.PairAddress),
+		AccountKey:   accountKey,
 		Dex:          int16(event.Dex),
-		TokenAddress: utils.EncodeBase58Strict(cache, event.Token),
-		QuoteAddress: utils.EncodeBase58Strict(cache, event.QuoteToken),
-		TokenAccount: utils.EncodeBase58Strict(cache, event.TokenAccount),
-		QuoteAccount: utils.EncodeBase58Strict(cache, event.QuoteTokenAccount),
+		TokenAddress: utils.EncodeBase58Strict(tokenCache, event.Token),
+		QuoteAddress: utils.EncodeBase58Strict(tokenCache, event.QuoteToken),
+		TokenAccount: utils.EncodeBase58Strict(tokenCache, event.TokenAccount),
+		QuoteAccount: utils.EncodeBase58Strict(tokenCache, event.QuoteTokenAccount),
+		CreateAt:     0,
+		UpdateAt:     int32(event.BlockTime),
+	}
+}
+
+func buildPoolModelFromLiquidity(event *pb.LiquidityEvent, tokenCache *lru.Cache, poolCache *PoolCache) *model.Pool {
+	accountKey, exists := poolCache.CheckAndInsert(event.PairAddress, event.TokenAccount, event.QuoteTokenAccount, event.Dex)
+	if exists {
+		return nil
+	}
+	return &model.Pool{
+		PoolAddress:  utils.EncodeBase58Strict(tokenCache, event.PairAddress),
+		AccountKey:   accountKey,
+		Dex:          int16(event.Dex),
+		TokenAddress: utils.EncodeBase58Strict(tokenCache, event.Token),
+		QuoteAddress: utils.EncodeBase58Strict(tokenCache, event.QuoteToken),
+		TokenAccount: utils.EncodeBase58Strict(tokenCache, event.TokenAccount),
+		QuoteAccount: utils.EncodeBase58Strict(tokenCache, event.QuoteTokenAccount),
 		CreateAt:     ifThen(event.Type == pb.EventType_CREATE_POOL, int32(event.BlockTime)),
 		UpdateAt:     int32(event.BlockTime),
 	}

@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS pool (
     pool_address VARCHAR(44) NOT NULL,
+    account_key BIGINT NOT NULL,
     dex SMALLINT NOT NULL,
     token_address VARCHAR(44) NOT NULL,
     quote_address VARCHAR(44) NOT NULL,
@@ -7,7 +8,7 @@ CREATE TABLE IF NOT EXISTS pool (
     quote_account VARCHAR(44) NOT NULL,
     create_at INT NOT NULL,
     update_at INT NOT NULL,
-    PRIMARY KEY (pool_address, token_account, quote_account)
+    PRIMARY KEY (pool_address, account_key)
 ) WITH (CONSISTENCY = 'strong', MUTABILITY = 'MUTABLE_LATEST');
 
 CREATE INDEX IF NOT EXISTS idx_pool_token_quote

@@ -106,7 +106,7 @@ func insertChainEventsSerial(ctx context.Context, dbConn *sql.DB, events []*mode
 		query := builder.String()
 		retryRange := fmt.Sprintf("[%d:%d]", i, end)
 
-		err = db.RetryWithBackoff(ctx, 10, func() error {
+		err = db.RetryWithBackoff(ctx, 30, func() error {
 			_, execErr := dbConn.ExecContext(ctx, query, args...)
 			if execErr != nil {
 				logger.Warnf("retrying chain_event insert %s: %v", retryRange, execErr)

@@ -41,6 +41,7 @@ type WorkerContext struct {
 	MsgCh       <-chan *kafka.Message // Kafka 消息通道
 	Kafka       *kafka.Consumer       // Kafka 消费者（用于 commit）
 	Base58Cache *lru.Cache            // base58 解码缓存
+	PoolCache   *handler.PoolCache    // LRU缓存，避免重复处理pool
 	BatchQueue  []*BlockBatch         // 当前缓存的 batch 队列
 
 	// 配置项
@@ -81,6 +82,9 @@ func StartWorker(
 		FlushInterval: conf.FlushInterval,
 		lastFlushTime: time.Now(),
 		flushCounter:  0,
+	}
+	if routerType == RouterEvent {
+		w.PoolCache = handler.NewPoolCache()
 	}
 	w.Run()
 }
@@ -134,7 +138,7 @@ func (w *WorkerContext) drainMessages(batchSize int) {
 }
 
 func (w *WorkerContext) handleMessage(msg *kafka.Message) {
-	batch := buildBlockBatch(w.RouterType, w.Partition, msg, w.Base58Cache)
+	batch := buildBlockBatch(w.RouterType, w.Partition, msg, w.Base58Cache, w.PoolCache)
 	if batch != nil {
 		w.BatchQueue = append(w.BatchQueue, batch)
 	}
@@ -188,7 +192,13 @@ func (w *WorkerContext) flushIfNeeded() {
 	}
 }
 
-func buildBlockBatch(routerType RouterType, partition int32, msg *kafka.Message, cache *lru.Cache) *BlockBatch {
+func buildBlockBatch(
+	routerType RouterType,
+	partition int32,
+	msg *kafka.Message,
+	base58Cache *lru.Cache,
+	poolCache *handler.PoolCache,
+) *BlockBatch {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Errorf(
@@ -223,11 +233,11 @@ func buildBlockBatch(routerType RouterType, partition int32, msg *kafka.Message,
 	// 根据 RouterType 分发事件解析
 	switch routerType {
 	case RouterEvent:
-		batch.Events = handler.BuildChainEventModels(events, cache)
-		batch.Pools = handler.BuildPoolModels(events, cache)
-		batch.Transfers = handler.BuildTransferEventModels(events, cache)
+		batch.Events = handler.BuildChainEventModels(events, base58Cache)
+		batch.Pools = handler.BuildPoolModels(events, base58Cache, poolCache)
+		batch.Transfers = handler.BuildTransferEventModels(events, base58Cache)
 	case RouterBalance:
-		batch.Balances = handler.BuildBalanceModels(events, cache)
+		batch.Balances = handler.BuildBalanceModels(events, base58Cache)
 	}
 
 	return batch

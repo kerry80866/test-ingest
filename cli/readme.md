@@ -38,6 +38,21 @@ go run build_event_id.go <tx_hash> <ix_index> <inner_index>
 go run cli/consts.go cli/check_indexer.go
 ```
 
+### 转冷存储transfer_event
+```bash
+ALTER TABLE transfer_event
+SET 'CHS' = '259200', 'CHS_L2' = 'storagetype=COLD';
+```
+### 转冷存储chain_event
+```bash
+ALTER TABLE chain_event
+SET 'CHS' = '432000', 'CHS_L2' = 'storagetype=COLD';
+```
+# 查询表结构
+```
+SHOW TABLE VARIABLES FROM chain_event;
+```
+
 ### 按 event_id 查询事件（含解析）
 
 ```bash

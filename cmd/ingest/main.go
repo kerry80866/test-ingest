@@ -17,7 +17,7 @@ import (
 	"syscall"
 )
 
-var configFile = flag.String("f", "etc/ingest-event.yaml", "the config file")
+var configFile = flag.String("f", "etc/ingest-balance.yaml", "the config file")
 
 func main() {
 	defer func() {
