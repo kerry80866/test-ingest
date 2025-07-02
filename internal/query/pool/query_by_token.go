@@ -66,13 +66,20 @@ func (s *QueryPoolService) QueryPoolsByToken(ctx context.Context, req *pb.PoolTo
 	pools := make([]*pb.Pool, 0, 10)
 	for rows.Next() {
 		p := &pb.Pool{}
+		var createAt *int32
 		if err := rows.Scan(
 			&p.PoolAddress, &p.Dex, &p.TokenAddress, &p.QuoteAddress,
-			&p.TokenAccount, &p.QuoteAccount, &p.CreateAt, &p.UpdateAt,
+			&p.TokenAccount, &p.QuoteAccount, &createAt, &p.UpdateAt,
 		); err != nil {
 			logger.Errorf("QueryPoolsByToken row scan failed: %v", err)
 			return nil, status.Errorf(codes.Internal, "[%d] failed to parse pool data", ErrCodeScanFailed)
 		}
+		if createAt != nil {
+			p.CreateAt = uint32(*createAt)
+		} else {
+			p.CreateAt = 0
+		}
+
 		// decode 转回原始地址
 		p.TokenAddress = utils.DecodeTokenAddress(p.TokenAddress)
 		p.QuoteAddress = utils.DecodeTokenAddress(p.QuoteAddress)

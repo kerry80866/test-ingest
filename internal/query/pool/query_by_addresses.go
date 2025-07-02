@@ -61,12 +61,18 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 	poolMap := make(map[string][]*pb.Pool, len(addresses))
 	for rows.Next() {
 		p := &pb.Pool{}
+		var createAt *int32
 		if err := rows.Scan(
 			&p.PoolAddress, &p.Dex, &p.TokenAddress, &p.QuoteAddress,
-			&p.TokenAccount, &p.QuoteAccount, &p.CreateAt, &p.UpdateAt,
+			&p.TokenAccount, &p.QuoteAccount, &createAt, &p.UpdateAt,
 		); err != nil {
 			logger.Errorf("QueryPoolsByAddresses row scan failed: %v", err)
 			return nil, status.Errorf(codes.Internal, "[%d] data scan failed", ErrCodeScanFailed)
+		}
+		if createAt != nil {
+			p.CreateAt = uint32(*createAt)
+		} else {
+			p.CreateAt = 0
 		}
 		p.TokenAddress = utils.DecodeTokenAddress(p.TokenAddress)
 		p.QuoteAddress = utils.DecodeTokenAddress(p.QuoteAddress)
