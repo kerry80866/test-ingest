@@ -60,7 +60,6 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 			uint32(pb.EventType_ADD_LIQUIDITY),
 			uint32(pb.EventType_REMOVE_LIQUIDITY),
 			uint32(pb.EventType_BURN),
-			uint32(pb.EventType_TRADE_UNKNOWN),
 		}
 	}
 
