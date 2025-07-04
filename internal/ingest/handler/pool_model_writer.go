@@ -15,11 +15,15 @@ import (
 )
 
 const (
-	poolBatchSize        = 1000
-	poolUpsertFieldCount = 9
+	poolBatchSize   = 1000
+	poolFieldCount9 = 9 // 包含 create_at
+	poolFieldCount8 = 8 // 不包含 create_at
 )
 
-var poolValuePlaceholder = "(" + strings.Repeat("?,", poolUpsertFieldCount-1) + "?)"
+var (
+	poolPlaceholders9 = genPlaceholders(poolFieldCount9)
+	poolPlaceholders8 = genPlaceholders(poolFieldCount8)
+)
 
 func InsertPools(ctx context.Context, dbConn *sql.DB, pools []*model.Pool) error {
 	withCreateAtPools, withoutCreateAtPools := dedupAndSplitPools(pools)
@@ -73,7 +77,7 @@ func insertPoolsSerial(ctx context.Context, dbConn *sql.DB, pools []*model.Pool,
 	}()
 
 	total := len(pools)
-	estimatedRowSQLSize := len(poolValuePlaceholder) + 32
+	estimatedRowSQLSize := len(poolPlaceholders9) + 32
 
 	for i := 0; i < total; i += poolBatchSize {
 		end := i + poolBatchSize
@@ -90,13 +94,13 @@ func insertPoolsSerial(ctx context.Context, dbConn *sql.DB, pools []*model.Pool,
 			builder.WriteString("INSERT INTO pool(" +
 				"pool_address,account_key,dex,token_address,quote_address," +
 				"token_account,quote_account,create_at,update_at) VALUES")
-			args = make([]any, 0, len(batch)*poolUpsertFieldCount)
+			args = make([]any, 0, len(batch)*poolFieldCount9)
 
 			for j, p := range batch {
 				if j > 0 {
 					builder.WriteByte(',')
 				}
-				builder.WriteString(poolValuePlaceholder)
+				builder.WriteString(poolPlaceholders9)
 				args = append(args,
 					p.PoolAddress, p.AccountKey, p.Dex, p.TokenAddress, p.QuoteAddress,
 					p.TokenAccount, p.QuoteAccount, p.CreateAt, p.UpdateAt,
@@ -106,13 +110,13 @@ func insertPoolsSerial(ctx context.Context, dbConn *sql.DB, pools []*model.Pool,
 			builder.WriteString("INSERT INTO pool(" +
 				"pool_address,account_key,dex,token_address,quote_address," +
 				"token_account,quote_account,update_at) VALUES")
-			args = make([]any, 0, len(batch)*(poolUpsertFieldCount-1))
+			args = make([]any, 0, len(batch)*poolFieldCount8)
 
 			for j, p := range batch {
 				if j > 0 {
 					builder.WriteByte(',')
 				}
-				builder.WriteString(poolValuePlaceholder)
+				builder.WriteString(poolPlaceholders8)
 				args = append(args,
 					p.PoolAddress, p.AccountKey, p.Dex, p.TokenAddress, p.QuoteAddress,
 					p.TokenAccount, p.QuoteAccount, p.UpdateAt,

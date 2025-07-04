@@ -18,7 +18,7 @@ const (
 	balanceUpsertFieldCount = 5    // account_address, owner_address, token_address, balance, last_event_id
 )
 
-var balanceValuePlaceholder = "(" + strings.Repeat("?,", balanceUpsertFieldCount-1) + "?)"
+var balanceValuePlaceholder = genPlaceholders(balanceUpsertFieldCount)
 
 func InsertBalances(ctx context.Context, db *sql.DB, balances []*model.Balance, isRealTime bool) error {
 	if len(balances) == 0 {

@@ -18,7 +18,7 @@ const (
 	transferEventsUpsertFieldCount = 11
 )
 
-var transferEventsValuePlaceholder = "(" + strings.Repeat("?,", transferEventsUpsertFieldCount-1) + "?)"
+var transferEventsValuePlaceholder = genPlaceholders(transferEventsUpsertFieldCount)
 
 func InsertTransferEvents(ctx context.Context, dbConn *sql.DB, events []*model.TransferEvent) error {
 	if len(events) == 0 {

@@ -19,7 +19,7 @@ const (
 	chainEventsUpsertFieldCount = 17
 )
 
-var chainEventsValuePlaceholder = "(" + strings.Repeat("?,", chainEventsUpsertFieldCount-1) + "?)"
+var chainEventsValuePlaceholder = genPlaceholders(chainEventsUpsertFieldCount)
 
 func InsertChainEvents(ctx context.Context, db *sql.DB, events []*model.ChainEvent) error {
 	if len(events) == 0 {

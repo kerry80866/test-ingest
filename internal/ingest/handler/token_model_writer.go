@@ -18,7 +18,7 @@ const (
 	tokenUpsertFieldCount = 10
 )
 
-var tokenValuePlaceholder = "(" + strings.Repeat("?,", tokenUpsertFieldCount-1) + "?)"
+var tokenValuePlaceholder = genPlaceholders(tokenUpsertFieldCount)
 
 func InsertTokens(ctx context.Context, db *sql.DB, tokens []*model.Token) error {
 	insertList, updateList := splitTokensForInsertAndUpdate(tokens)
