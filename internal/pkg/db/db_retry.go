@@ -5,7 +5,6 @@ import (
 	"dex-ingest-sol/internal/pkg/logger"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -60,28 +59,29 @@ func shouldRetry(err error) bool {
 	if err == nil {
 		return false
 	}
-	errMsg := strings.ToLower(err.Error())
-
-	// 聚合常见重试关键词
-	timeoutKeywords := []string{
-		"timeout",
-		"time out",
-		"connection refused",
-		"connection reset",
-		"broken pipe",
-		"driver: bad connection",
-		"i/o timeout",
-		"connection aborted",
-		"network is unreachable",
-		"no such host",
-		"tls: handshake failure",
-		"server has gone away",
-	}
-
-	for _, keyword := range timeoutKeywords {
-		if strings.Contains(errMsg, keyword) {
-			return true
-		}
-	}
-	return false
+	return true
+	//errMsg := strings.ToLower(err.Error())
+	//
+	//// 聚合常见重试关键词
+	//timeoutKeywords := []string{
+	//	"timeout",
+	//	"time out",
+	//	"connection refused",
+	//	"connection reset",
+	//	"broken pipe",
+	//	"driver: bad connection",
+	//	"i/o timeout",
+	//	"connection aborted",
+	//	"network is unreachable",
+	//	"no such host",
+	//	"tls: handshake failure",
+	//	"server has gone away",
+	//}
+	//
+	//for _, keyword := range timeoutKeywords {
+	//	if strings.Contains(errMsg, keyword) {
+	//		return true
+	//	}
+	//}
+	//return false
 }
