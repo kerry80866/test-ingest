@@ -5,6 +5,7 @@ import (
 	"dex-ingest-sol/internal/pkg/logger"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -37,10 +38,6 @@ func RetryWithBackoff(ctx context.Context, maxRetries int, op func() error) erro
 			return err
 		}
 
-		if !shouldRetry(err) {
-			return err
-		}
-
 		// 计算下一次延迟
 		delay := delays[min(attempt, len(delays)-1)]
 
@@ -59,29 +56,28 @@ func shouldRetry(err error) bool {
 	if err == nil {
 		return false
 	}
-	return true
-	//errMsg := strings.ToLower(err.Error())
-	//
-	//// 聚合常见重试关键词
-	//timeoutKeywords := []string{
-	//	"timeout",
-	//	"time out",
-	//	"connection refused",
-	//	"connection reset",
-	//	"broken pipe",
-	//	"driver: bad connection",
-	//	"i/o timeout",
-	//	"connection aborted",
-	//	"network is unreachable",
-	//	"no such host",
-	//	"tls: handshake failure",
-	//	"server has gone away",
-	//}
-	//
-	//for _, keyword := range timeoutKeywords {
-	//	if strings.Contains(errMsg, keyword) {
-	//		return true
-	//	}
-	//}
-	//return false
+	errMsg := strings.ToLower(err.Error())
+
+	// 聚合常见重试关键词
+	timeoutKeywords := []string{
+		"timeout",
+		"time out",
+		"connection refused",
+		"connection reset",
+		"broken pipe",
+		"driver: bad connection",
+		"i/o timeout",
+		"connection aborted",
+		"network is unreachable",
+		"no such host",
+		"tls: handshake failure",
+		"server has gone away",
+	}
+
+	for _, keyword := range timeoutKeywords {
+		if strings.Contains(errMsg, keyword) {
+			return true
+		}
+	}
+	return false
 }
