@@ -25,6 +25,7 @@ func RetryWithBackoff(ctx context.Context, maxRetries int, op func() error) erro
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		select {
 		case <-ctx.Done():
+			logger.Warnf("ctx done at attempt=%d: %v", attempt, ctx.Err())
 			return ctx.Err() // 主动取消，不再重试
 		default:
 		}
@@ -34,7 +35,8 @@ func RetryWithBackoff(ctx context.Context, maxRetries int, op func() error) erro
 			return nil
 		}
 
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, context.Canceled) {
+			logger.Warnf("canceled at attempt=%d: %v", attempt, err)
 			return err
 		}
 
