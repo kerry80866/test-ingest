@@ -105,7 +105,7 @@ func insertTransferEventsSerial(ctx context.Context, dbConn *sql.DB, events []*m
 		query := builder.String()
 		retryRange := fmt.Sprintf("[%d:%d sub=%d:%d]", startIndex, endIndex, i, end)
 
-		err = db.RetryWithBackoff(ctx, 30, func() error {
+		err = db.RetryWithBackoff(ctx, func() error {
 			_, execErr := dbConn.ExecContext(ctx, query, args...)
 			if execErr != nil {
 				logger.Warnf("retrying transfer_event insert %s: %v", retryRange, execErr)

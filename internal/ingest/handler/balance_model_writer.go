@@ -156,7 +156,7 @@ func upsertBalancesRealtime(ctx context.Context, dbConn *sql.DB, balances []*mod
 		query := builder.String()
 
 		retryRange := fmt.Sprintf("[%d:%d]", i, end)
-		err := db.RetryWithBackoff(ctx, 30, func() error {
+		err := db.RetryWithBackoff(ctx, func() error {
 			_, execErr := dbConn.ExecContext(ctx, query, args...)
 			if execErr != nil {
 				logger.Warnf("retrying balance upsert %s: %v", retryRange, execErr)
@@ -207,7 +207,7 @@ func deleteBalancesRealtime(ctx context.Context, dbConn *sql.DB, balances []*mod
 		query := "DELETE FROM balance WHERE account_address IN (" + placeholders + ")"
 
 		retryRange := fmt.Sprintf("[%d:%d]", i, end)
-		err := db.RetryWithBackoff(ctx, 30, func() error {
+		err := db.RetryWithBackoff(ctx, func() error {
 			_, execErr := dbConn.ExecContext(ctx, query, args...)
 			if execErr != nil {
 				logger.Warnf("retrying balance delete %s: %v", retryRange, execErr)
@@ -253,7 +253,7 @@ func filterBalancesByLastEventID(ctx context.Context, dbConn *sql.DB, balances [
 			args[j] = addr
 		}
 
-		err := db.RetryWithBackoff(ctx, 30, func() error {
+		err := db.RetryWithBackoff(ctx, func() error {
 			rows, queryErr := dbConn.QueryContext(ctx, query, args...)
 			if queryErr != nil {
 				logger.Warnf("retrying select balances [%d:%d]: %v", i, end, queryErr)

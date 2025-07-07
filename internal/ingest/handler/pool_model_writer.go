@@ -127,7 +127,7 @@ func insertPoolsSerial(ctx context.Context, dbConn *sql.DB, pools []*model.Pool,
 		query := builder.String()
 		retryRange := fmt.Sprintf("[%d:%d]", startIndex+i, startIndex+end)
 
-		err = db.RetryWithBackoff(ctx, 30, func() error {
+		err = db.RetryWithBackoff(ctx, func() error {
 			_, execErr := dbConn.ExecContext(ctx, query, args...)
 			if execErr != nil {
 				logger.Warnf("retrying pool insert %s: %v", retryRange, execErr)

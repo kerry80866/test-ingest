@@ -11,15 +11,8 @@ import (
 
 // RetryWithBackoff retries the given operation with exponential backoff.
 // Delay pattern: 100ms, 400ms, 1s, 2s, 5s x N
-func RetryWithBackoff(ctx context.Context, maxRetries int, op func() error) error {
-	delays := []time.Duration{
-		100 * time.Millisecond,
-		400 * time.Millisecond,
-		1 * time.Second,
-		2 * time.Second,
-		5 * time.Second,
-		10 * time.Second,
-	}
+func RetryWithBackoff(ctx context.Context, op func() error) error {
+	const maxRetries = 100
 
 	var err error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -41,7 +34,7 @@ func RetryWithBackoff(ctx context.Context, maxRetries int, op func() error) erro
 		}
 
 		// 计算下一次延迟
-		delay := delays[min(attempt, len(delays)-1)]
+		delay := getBackoffDelay(attempt)
 
 		// 日志放在此处，避免第一次 op() 之前就打印
 		logger.Warnf("retrying after error (attempt=%d, delay=%s): %v", attempt+1, delay, err)
@@ -50,6 +43,23 @@ func RetryWithBackoff(ctx context.Context, maxRetries int, op func() error) erro
 	}
 
 	return fmt.Errorf("retry failed after %d attempts: %w", maxRetries, err)
+}
+
+func getBackoffDelay(attempt int) time.Duration {
+	switch {
+	case attempt == 0:
+		return 100 * time.Millisecond
+	case attempt == 1:
+		return 400 * time.Millisecond
+	case attempt <= 2:
+		return 1 * time.Second
+	case attempt <= 3:
+		return 2 * time.Second
+	case attempt <= 5:
+		return 5 * time.Second
+	default:
+		return 10 * time.Second
+	}
 }
 
 // shouldRetry 判断错误是否是临时性网络错误，适合重试。
