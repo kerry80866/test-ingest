@@ -26,11 +26,9 @@ CREATE TABLE IF NOT EXISTS chain_event (
 )
         WITH (CONSISTENCY = 'strong', MUTABILITY = 'MUTABLE_LATEST');
 
-
 CREATE INDEX IF NOT EXISTS idx_pool_type_id
     ON chain_event(pool_address, event_type, event_id DESC)
     WITH (INDEX_COVERED_TYPE = 'COVERED_ALL_COLUMNS_IN_SCHEMA');
-
 
 CREATE INDEX IF NOT EXISTS idx_user_token_type_id_desc
     ON chain_event(user_wallet, token, event_type, event_id DESC)
