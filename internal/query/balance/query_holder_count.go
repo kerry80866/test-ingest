@@ -32,6 +32,9 @@ func (s *QueryBalanceService) QueryHolderCountByToken(ctx context.Context, req *
 	}
 
 	encoded := utils.EncodeTokenAddress(token)
+	if utils.IsKnownToken(encoded) {
+		return &pb.HolderCountResp{Count: 0}, nil
+	}
 
 	var (
 		count    int64
@@ -66,11 +69,30 @@ func (s *QueryBalanceService) QueryHolderCountByToken(ctx context.Context, req *
 		}
 
 		e.Result = count
-		e.SetValidAt(time.Now().Add(holderCountTTL))
+		e.SetValidAt(time.Now().Add(getHolderCountTTL(count)))
 	})
 
 	if localErr != nil {
 		return nil, localErr
 	}
 	return &pb.HolderCountResp{Count: uint64(count)}, nil
+}
+
+func getHolderCountTTL(count int64) time.Duration {
+	switch {
+	case count < 500:
+		return 5 * time.Second
+	case count < 1_000:
+		return 10 * time.Second
+	case count < 5_000:
+		return 15 * time.Second
+	case count < 10_000:
+		return 30 * time.Second
+	case count < 20_000:
+		return 1 * time.Minute
+	case count < 50_000:
+		return 3 * time.Minute
+	default:
+		return 5 * time.Minute
+	}
 }

@@ -42,6 +42,16 @@ var knownIDToToken = map[string]string{
 	"3": usdtMintStr,
 }
 
+func IsKnownToken(addrOrID string) bool {
+	if _, ok := knownIDToToken[addrOrID]; ok {
+		return true
+	}
+	if _, ok := knownTokenToID[addrOrID]; ok {
+		return true
+	}
+	return false
+}
+
 func EncodeTokenAddress(addr string) string {
 	if id, ok := knownTokenToID[addr]; ok {
 		return id

@@ -108,15 +108,16 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 	for key, pool := range poolMap {
 		setPoolsCache(key, pool)
 	}
-	for _, addr := range missingAddrs {
-		if _, ok := poolMap[addr]; !ok {
-			setPoolsCache(addr, []*pb.Pool{}) // 显式写入空缓存
-		}
-	}
 
 	if err := rows.Err(); err != nil {
 		logger.Errorf("QueryPoolsByAddresses rows iteration error: %v", err)
 		return nil, status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
+	}
+
+	for _, addr := range missingAddrs {
+		if _, ok := poolMap[addr]; !ok {
+			setPoolsCache(addr, []*pb.Pool{}) // 显式写入空缓存
+		}
 	}
 	return makeResult(poolMap, addresses), nil
 }

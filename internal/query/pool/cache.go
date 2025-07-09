@@ -10,6 +10,7 @@ const (
 	poolsByAddressTTL      = 120 * time.Second // 正常数据 TTL
 	poolsByAddressEmptyTTL = 20 * time.Second  // 空结果 TTL，防止穿透
 	poolsByTokenTTL        = 60 * time.Second
+	poolsByTokenEmptyTTL   = 20 * time.Second // 空结果 TTL，防止穿透
 )
 
 // 缓存实例
