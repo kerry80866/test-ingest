@@ -114,7 +114,7 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 
 		if !e.IsExpired() {
 			cached, ok := e.Result.([]*pb.ChainEvent)
-			if ok {
+			if ok && len(cached) > 0 {
 				result = cached
 				return
 			}
