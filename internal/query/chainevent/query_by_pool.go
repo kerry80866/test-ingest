@@ -155,8 +155,6 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 			ev.QuoteToken = utils.DecodeTokenAddress(ev.QuoteToken)
 
 			results = append(results, ev)
-			e.Result = results
-			e.SetValidAt(time.Now().Add(chainEventsByPoolTTL))
 		}
 
 		if queryErr = rows.Err(); queryErr != nil {
@@ -164,6 +162,9 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 			localErr = status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
 			return
 		}
+
+		e.Result = results
+		e.SetValidAt(time.Now().Add(chainEventsByPoolTTL))
 	})
 
 	if localErr != nil {
