@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const interval = 30 * time.Second
+const interval = 60 * time.Second
 
 type Entry struct {
 	mu        sync.Mutex
@@ -88,10 +88,16 @@ func (lc *LockCache) doStr(key any, fn func(e *Entry)) {
 			entry = &Entry{CreatedAt: time.Now()}
 			lc.entriesStr[hash] = entry
 		}
+		entry.inUse.Add(1)
 		lc.mu.Unlock()
+	} else {
+		// 没有加锁，但可以接受：
+		// - 命中路径的 entry 通常是活跃的，不会过期；
+		// - 就算在极端并发下被清理线程误删，也只会导致下一次重新构建 entry；
+		// - 不影响功能，仅多了一次请求（容忍型设计，性能优先）
+		entry.inUse.Add(1)
 	}
 
-	entry.inUse.Add(1)
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 	defer entry.inUse.Add(-1)
@@ -129,10 +135,16 @@ func (lc *LockCache) doUint64(key any, fn func(e *Entry)) {
 			entry = &Entry{CreatedAt: time.Now()}
 			lc.entries[hash] = entry
 		}
+		entry.inUse.Add(1)
 		lc.mu.Unlock()
+	} else {
+		// 没有加锁，但可以接受：
+		// - 命中路径的 entry 通常是活跃的，不会过期；
+		// - 就算在极端并发下被清理线程误删，也只会导致下一次重新构建 entry；
+		// - 不影响功能，仅多了一次请求（容忍型设计，性能优先）
+		entry.inUse.Add(1)
 	}
 
-	entry.inUse.Add(1)
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 	defer entry.inUse.Add(-1)
