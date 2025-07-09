@@ -1,6 +1,8 @@
 package db
 
 import (
+	"dex-ingest-sol/internal/pkg/logger"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,19 +15,17 @@ type Entry struct {
 	Result    any
 	Raw       any
 	CreatedAt time.Time
-	validAt   atomic.Int64 // 存储 UnixNano
+	validAt   atomic.Uint32 // 存储 Unix 秒级时间戳
+	inUse     atomic.Int32
 }
 
 func (e *Entry) SetValidAt(t time.Time) {
-	e.validAt.Store(t.UnixNano())
-}
-
-func (e *Entry) GetValidAt() time.Time {
-	return time.Unix(0, e.validAt.Load())
+	e.validAt.Store(uint32(t.Unix()))
 }
 
 func (e *Entry) IsExpired() bool {
-	return time.Now().UnixNano() > e.validAt.Load()
+	sec := e.validAt.Load()
+	return time.Now().Unix() > int64(sec)
 }
 
 type LockCache struct {
@@ -51,7 +51,7 @@ func NewLockCache(maxSize int, useStringKey bool) *LockCache {
 	return lc
 }
 
-func (lc *LockCache) Do(key any, fn func(e *Entry, created bool)) {
+func (lc *LockCache) Do(key any, fn func(e *Entry)) {
 	if lc.useStringKey {
 		lc.doStr(key, fn)
 	} else {
@@ -59,46 +59,13 @@ func (lc *LockCache) Do(key any, fn func(e *Entry, created bool)) {
 	}
 }
 
-func (lc *LockCache) doUint64(key any, fn func(e *Entry, created bool)) {
-	hash, ok := key.(uint64)
-	if !ok {
-		panic("LockCache: expected uint64 key")
-	}
-
-	var entry *Entry
-	created := false
-
-	// 获取或创建 entry
-	lc.mu.Lock()
-	entry, ok = lc.entries[hash]
-	if !ok {
-		if len(lc.entries) >= lc.maxSize {
-			lc.mu.Unlock()
-			lc.cleanupExpired()
-			lc.mu.Lock()
-			entry, ok = lc.entries[hash]
-		}
-	}
-	if !ok {
-		entry = &Entry{CreatedAt: time.Now()}
-		lc.entries[hash] = entry
-		created = true
-	}
-	lc.mu.Unlock()
-
-	entry.mu.Lock()
-	fn(entry, created)
-	entry.mu.Unlock()
-}
-
-func (lc *LockCache) doStr(key any, fn func(e *Entry, created bool)) {
+func (lc *LockCache) doStr(key any, fn func(e *Entry)) {
 	hash, ok := key.(string)
 	if !ok {
 		panic("LockCache: expected string key")
 	}
 
 	var entry *Entry
-	created := false
 
 	// 获取或创建 entry
 	lc.mu.Lock()
@@ -114,13 +81,57 @@ func (lc *LockCache) doStr(key any, fn func(e *Entry, created bool)) {
 	if !ok {
 		entry = &Entry{CreatedAt: time.Now()}
 		lc.entriesStr[hash] = entry
-		created = true
 	}
+	entry.inUse.Add(1)
 	lc.mu.Unlock()
 
 	entry.mu.Lock()
-	fn(entry, created)
-	entry.mu.Unlock()
+	defer entry.mu.Unlock()
+	defer entry.inUse.Add(-1)
+
+	lc.safeRun(entry, fn)
+}
+
+func (lc *LockCache) doUint64(key any, fn func(e *Entry)) {
+	hash, ok := key.(uint64)
+	if !ok {
+		panic("LockCache: expected uint64 key")
+	}
+
+	var entry *Entry
+
+	// 获取或创建 entry
+	lc.mu.Lock()
+	entry, ok = lc.entries[hash]
+	if !ok {
+		if len(lc.entries) >= lc.maxSize {
+			lc.mu.Unlock()
+			lc.cleanupExpired()
+			lc.mu.Lock()
+			entry, ok = lc.entries[hash]
+		}
+	}
+	if !ok {
+		entry = &Entry{CreatedAt: time.Now()}
+		lc.entries[hash] = entry
+	}
+	entry.inUse.Add(1)
+	lc.mu.Unlock()
+
+	entry.mu.Lock()
+	defer entry.mu.Unlock()
+	defer entry.inUse.Add(-1)
+
+	lc.safeRun(entry, fn)
+}
+
+func (lc *LockCache) safeRun(e *Entry, fn func(e *Entry)) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("[LockCache] panic in fn: %v\n%s", r, debug.Stack())
+		}
+	}()
+	fn(e)
 }
 
 func (lc *LockCache) startAutoCleanup() {
@@ -136,19 +147,18 @@ func (lc *LockCache) startAutoCleanup() {
 }
 
 func (lc *LockCache) cleanupExpired() {
-	now := time.Now().UnixNano()
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
 	if lc.useStringKey {
 		for key, entry := range lc.entriesStr {
-			if now > entry.validAt.Load() {
+			if entry.inUse.Load() == 0 && entry.IsExpired() {
 				delete(lc.entriesStr, key)
 			}
 		}
 	} else {
 		for hash, entry := range lc.entries {
-			if now > entry.validAt.Load() {
+			if entry.inUse.Load() == 0 && entry.IsExpired() {
 				delete(lc.entries, hash)
 			}
 		}

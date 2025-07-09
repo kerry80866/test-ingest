@@ -82,7 +82,7 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 	if req.EventId != nil && *req.EventId != 0 {
 		query.WriteString(" AND event_id < ?")
 		params = append(params, *req.EventId)
-		key.WriteByte(':')
+		key.WriteString(":i")
 		key.WriteString(strconv.FormatUint(*req.EventId, 16))
 	}
 
@@ -97,14 +97,14 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 		}
 	}
 	query.WriteString(fmt.Sprintf(" LIMIT %d", limit))
-	key.WriteByte(':')
+	key.WriteString(":l")
 	key.WriteString(strconv.FormatUint(uint64(limit), 16))
 
 	var (
 		result   []*pb.ChainEvent
 		localErr error
 	)
-	chainEventsByPoolCache.Do(key.String(), func(e *db.Entry, created bool) {
+	chainEventsByPoolCache.Do(key.String(), func(e *db.Entry) {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Errorf("panic in QueryEventsByPool cache func: %v", r)
@@ -112,7 +112,7 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 			}
 		}()
 
-		if !created && !e.IsExpired() {
+		if !e.IsExpired() {
 			cached, ok := e.Result.([]*pb.ChainEvent)
 			if ok {
 				result = cached

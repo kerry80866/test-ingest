@@ -65,7 +65,7 @@ func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *p
 	)
 
 	key := fmt.Sprintf("%s:%d", encoded, fetchLimit)
-	topHoldersByTokenCache.Do(key, func(e *db.Entry, created bool) {
+	topHoldersByTokenCache.Do(key, func(e *db.Entry) {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Errorf("panic in topHoldersByTokenCache func: %+v", r)
@@ -73,7 +73,7 @@ func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *p
 			}
 		}()
 
-		if !created && !e.IsExpired() {
+		if !e.IsExpired() {
 			if cached, ok := e.Result.([]*pb.Holder); ok {
 				holderList = cached
 				return

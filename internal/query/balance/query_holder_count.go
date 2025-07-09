@@ -38,7 +38,7 @@ func (s *QueryBalanceService) QueryHolderCountByToken(ctx context.Context, req *
 		localErr error
 	)
 
-	holderCountCache.Do(encoded, func(e *db.Entry, created bool) {
+	holderCountCache.Do(encoded, func(e *db.Entry) {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Errorf("panic in QueryHolderCountByToken cache func: %v", r)
@@ -46,7 +46,7 @@ func (s *QueryBalanceService) QueryHolderCountByToken(ctx context.Context, req *
 			}
 		}()
 
-		if !created && !e.IsExpired() {
+		if !e.IsExpired() {
 			cached, ok := e.Result.(int64)
 			if ok {
 				count = cached

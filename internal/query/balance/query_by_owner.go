@@ -72,7 +72,7 @@ func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.
 		localErr error
 	)
 
-	balancesByOwnerCache.Do(key, func(e *db.Entry, created bool) {
+	balancesByOwnerCache.Do(key, func(e *db.Entry) {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Errorf("panic in QueryBalancesByOwner: %v", r)
@@ -80,7 +80,7 @@ func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.
 			}
 		}()
 
-		if !created && !e.IsExpired() {
+		if !e.IsExpired() {
 			cached, ok := e.Result.([]*pb.Balance)
 			if ok {
 				result = cached

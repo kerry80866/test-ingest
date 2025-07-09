@@ -46,9 +46,9 @@ func (s *QueryBalanceService) QueryBalancesByAccounts(ctx context.Context, req *
 
 	// 先从缓存中尝试获取
 	for _, addr := range accounts {
-		var found bool
-		balancesByAccountsCache.Do(addr, func(e *db.Entry, created bool) {
-			if !created && !e.IsExpired() {
+		found := false
+		balancesByAccountsCache.Do(addr, func(e *db.Entry) {
+			if !e.IsExpired() {
 				if cached, ok := e.Result.(*pb.Balance); ok {
 					balanceMap[addr] = cached
 					found = true
@@ -98,7 +98,7 @@ func (s *QueryBalanceService) QueryBalancesByAccounts(ctx context.Context, req *
 		bal.TokenAddress = utils.DecodeTokenAddress(bal.TokenAddress)
 		balanceMap[addr] = bal
 
-		balancesByAccountsCache.Do(addr, func(e *db.Entry, created bool) {
+		balancesByAccountsCache.Do(addr, func(e *db.Entry) {
 			e.Result = bal
 			e.SetValidAt(time.Now().Add(balancesByAccountsTTL))
 		})

@@ -2,12 +2,14 @@ package pool
 
 import (
 	"context"
+	"dex-ingest-sol/internal/pkg/db"
 	"dex-ingest-sol/internal/pkg/logger"
 	"dex-ingest-sol/internal/pkg/utils"
 	"dex-ingest-sol/pb"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"strings"
+	"time"
 )
 
 func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.PoolAddressesReq) (resp *pb.PoolListResp, err error) {
@@ -37,16 +39,41 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 		return nil, status.Errorf(codes.Internal, "[%d] at most %d pool addresses are allowed in a single request", ErrCodeParamTooMany, maxAddresses)
 	}
 
+	var (
+		missingAddrs = make([]string, 0, len(addresses))
+		poolMap      = make(map[string][]*pb.Pool, len(addresses))
+	)
+
+	// 先从缓存中获取
+	for _, addr := range addresses {
+		found := false
+		poolsByAddressCache.Do(addr, func(e *db.Entry) {
+			if !e.IsExpired() {
+				if cached, ok := e.Result.([]*pb.Pool); ok {
+					poolMap[addr] = cached
+					found = true
+					return
+				}
+			}
+		})
+		if !found {
+			missingAddrs = append(missingAddrs, addr)
+		}
+	}
+	if len(missingAddrs) == 0 {
+		return makeResult(poolMap, addresses), nil
+	}
+
 	// 构建查询语句
 	query := `
 		SELECT pool_address, dex, token_address, quote_address, token_account, quote_account, create_at, update_at
 		FROM pool
 		WHERE pool_address IN (`
-	placeholders := strings.Repeat("?,", len(addresses))
+	placeholders := strings.Repeat("?,", len(missingAddrs))
 	query += placeholders[:len(placeholders)-1] + ")"
 
-	args := make([]any, len(addresses))
-	for i, addr := range addresses {
+	args := make([]any, len(missingAddrs))
+	for i, addr := range missingAddrs {
 		args[i] = addr
 	}
 
@@ -58,7 +85,6 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 	defer rows.Close()
 
 	// 构建 pool_address -> []*Pool 映射
-	poolMap := make(map[string][]*pb.Pool, len(addresses))
 	for rows.Next() {
 		p := &pb.Pool{}
 		var createAt *int32
@@ -79,11 +105,34 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 		poolMap[p.PoolAddress] = append(poolMap[p.PoolAddress], p)
 	}
 
+	for key, pool := range poolMap {
+		setPoolsCache(key, pool)
+	}
+	for _, addr := range missingAddrs {
+		if _, ok := poolMap[addr]; !ok {
+			setPoolsCache(addr, []*pb.Pool{}) // 显式写入空缓存
+		}
+	}
+
 	if err := rows.Err(); err != nil {
 		logger.Errorf("QueryPoolsByAddresses rows iteration error: %v", err)
 		return nil, status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
 	}
+	return makeResult(poolMap, addresses), nil
+}
 
+func setPoolsCache(key string, value []*pb.Pool) {
+	poolsByAddressCache.Do(key, func(e *db.Entry) {
+		e.Result = value
+		if len(value) == 0 {
+			e.SetValidAt(time.Now().Add(poolsByAddressEmptyTTL))
+		} else {
+			e.SetValidAt(time.Now().Add(poolsByAddressTTL))
+		}
+	})
+}
+
+func makeResult(poolMap map[string][]*pb.Pool, addresses []string) *pb.PoolListResp {
 	// 构建结果
 	results := make([]*pb.PoolResult, 0, len(addresses))
 	for _, addr := range addresses {
@@ -96,6 +145,5 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 			Pools:       pools,
 		})
 	}
-
-	return &pb.PoolListResp{Results: results}, nil
+	return &pb.PoolListResp{Results: results}
 }
