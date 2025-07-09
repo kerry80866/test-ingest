@@ -130,7 +130,6 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 		defer rows.Close()
 
 		// 解析结果
-		var results []*pb.ChainEvent
 		for rows.Next() {
 			ev := &pb.ChainEvent{}
 			var tokenAmount, quoteAmount string
@@ -154,7 +153,7 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 			ev.Token = utils.DecodeTokenAddress(ev.Token)
 			ev.QuoteToken = utils.DecodeTokenAddress(ev.QuoteToken)
 
-			results = append(results, ev)
+			result = append(result, ev)
 		}
 
 		if queryErr = rows.Err(); queryErr != nil {
@@ -163,8 +162,12 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 			return
 		}
 
-		e.Result = results
-		e.SetValidAt(time.Now().Add(chainEventsByPoolTTL))
+		e.Result = result
+		if len(result) == 0 {
+			e.SetValidAt(time.Now().Add(chainEventsByPoolEmptyTTL))
+		} else {
+			e.SetValidAt(time.Now().Add(chainEventsByPoolTTL))
+		}
 	})
 
 	if localErr != nil {

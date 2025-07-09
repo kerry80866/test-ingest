@@ -7,10 +7,11 @@ import (
 
 // 缓存 TTL 设置
 const (
-	chainEventsByIDsTTL  = 5 * time.Second
-	chainEventsByPoolTTL = 10 * time.Second
-	chainEventsByUserTTL = 30 * time.Second
-	transferEventsTTL    = 30 * time.Second
+	chainEventsByIDsTTL       = 5 * time.Second
+	chainEventsByPoolTTL      = 10 * time.Second
+	chainEventsByPoolEmptyTTL = 3 * time.Second
+	chainEventsByUserTTL      = 30 * time.Second
+	transferEventsTTL         = 30 * time.Second
 )
 
 // 缓存实例
