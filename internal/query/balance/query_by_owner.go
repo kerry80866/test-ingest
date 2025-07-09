@@ -2,12 +2,15 @@ package balance
 
 import (
 	"context"
+	"dex-ingest-sol/internal/pkg/db"
 	"dex-ingest-sol/internal/pkg/logger"
 	"dex-ingest-sol/internal/pkg/utils"
 	"dex-ingest-sol/pb"
+	"fmt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"strings"
+	"time"
 )
 
 func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.OwnerReq) (resp *pb.BalanceResp, err error) {
@@ -44,6 +47,7 @@ func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.
 		tokenAddr = strings.TrimSpace(*req.TokenAddress)
 	}
 
+	key := owner
 	if tokenAddr != "" {
 		tokenID := utils.EncodeTokenAddress(tokenAddr)
 		query = `
@@ -52,6 +56,8 @@ func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.
 			WHERE owner_address = ? AND token_address = ?
 			LIMIT ?`
 		args = []any{owner, tokenID, maxResultLimit}
+
+		key = fmt.Sprintf("%s:%s", owner, tokenID)
 	} else {
 		query = `
 			SELECT account_address, token_address, balance
@@ -61,33 +67,64 @@ func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.
 		args = []any{owner, maxResultLimit}
 	}
 
-	rows, err := s.DB.QueryContext(ctx, query, args...)
-	if err != nil {
-		logger.Errorf("QueryBalancesByOwner query failed: %v", err)
-		return nil, status.Errorf(codes.Internal, "[%d] query error", ErrCodeQueryFailed)
-	}
-	defer rows.Close()
+	var (
+		result   []*pb.Balance
+		localErr error
+	)
 
-	balances := make([]*pb.Balance, 0, 10)
-	for rows.Next() {
-		var balanceStr string
-		bal := &pb.Balance{
-			OwnerAddress: owner,
-			LastEventId:  0, // 数据库没查出，可设为默认值
+	balancesByOwnerCache.Do(key, func(e *db.Entry, created bool) {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Errorf("panic in QueryBalancesByOwner: %v", r)
+				localErr = status.Errorf(codes.Internal, "[%d] server panic", ErrCodePanic)
+			}
+		}()
+
+		if !created && !e.IsExpired() {
+			cached, ok := e.Result.([]*pb.Balance)
+			if ok {
+				result = cached
+				return
+			}
 		}
-		if err := rows.Scan(&bal.AccountAddress, &bal.TokenAddress, &balanceStr); err != nil {
-			logger.Errorf("QueryBalancesByOwner row scan failed: %v", err)
-			return nil, status.Errorf(codes.Internal, "[%d] data scan failed", ErrCodeScanFailed)
+
+		rows, queryErr := s.DB.QueryContext(ctx, query, args...)
+		if queryErr != nil {
+			logger.Errorf("QueryBalancesByOwner query failed: %v", queryErr)
+			localErr = status.Errorf(codes.Internal, "[%d] query error", ErrCodeQueryFailed)
+			return
 		}
-		bal.Balance = utils.ParseUint64(balanceStr)
-		bal.TokenAddress = utils.DecodeTokenAddress(bal.TokenAddress)
-		balances = append(balances, bal)
-	}
+		defer rows.Close()
 
-	if err := rows.Err(); err != nil {
-		logger.Errorf("QueryBalancesByOwner rows iteration error: %v", err)
-		return nil, status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
-	}
+		result = make([]*pb.Balance, 0, 10)
+		for rows.Next() {
+			var balanceStr string
+			bal := &pb.Balance{
+				OwnerAddress: owner,
+				LastEventId:  0, // 数据库没查出，可设为默认值
+			}
+			if queryErr = rows.Scan(&bal.AccountAddress, &bal.TokenAddress, &balanceStr); queryErr != nil {
+				logger.Errorf("QueryBalancesByOwner row scan failed: %v", queryErr)
+				localErr = status.Errorf(codes.Internal, "[%d] data scan failed", ErrCodeScanFailed)
+				return
+			}
+			bal.Balance = utils.ParseUint64(balanceStr)
+			bal.TokenAddress = utils.DecodeTokenAddress(bal.TokenAddress)
+			result = append(result, bal)
+		}
 
-	return &pb.BalanceResp{Balances: balances}, nil
+		if queryErr = rows.Err(); queryErr != nil {
+			logger.Errorf("QueryBalancesByOwner rows iteration error: %v", queryErr)
+			localErr = status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
+			return
+		}
+
+		e.Result = result
+		e.SetValidAt(time.Now().Add(balancesByOwnerTTL))
+	})
+
+	if localErr != nil {
+		return nil, localErr
+	}
+	return &pb.BalanceResp{Balances: result}, nil
 }

@@ -2,13 +2,16 @@ package chainevent
 
 import (
 	"context"
+	"dex-ingest-sol/internal/pkg/db"
 	"dex-ingest-sol/internal/pkg/logger"
 	"dex-ingest-sol/internal/pkg/utils"
 	"dex-ingest-sol/pb"
 	"fmt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.PoolEventReq) (resp *pb.EventResp, err error) {
@@ -39,6 +42,7 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 
 	var (
 		query  strings.Builder
+		key    strings.Builder
 		params []any
 	)
 
@@ -50,6 +54,7 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 		WHERE pool_address = ?
 	`)
 	params = append(params, req.PoolAddress)
+	key.WriteString(req.PoolAddress)
 
 	// 安全地构建事件类型列表
 	eventTypes := req.EventType
@@ -69,12 +74,16 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 	query.WriteString(")")
 	for _, et := range eventTypes {
 		params = append(params, et)
+		key.WriteByte(':')
+		key.WriteString(strconv.FormatUint(uint64(et), 16))
 	}
 
 	// 游标翻页
 	if req.EventId != nil && *req.EventId != 0 {
 		query.WriteString(" AND event_id < ?")
 		params = append(params, *req.EventId)
+		key.WriteByte(':')
+		key.WriteString(strconv.FormatUint(*req.EventId, 16))
 	}
 
 	query.WriteString(" ORDER BY event_id DESC")
@@ -88,46 +97,77 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 		}
 	}
 	query.WriteString(fmt.Sprintf(" LIMIT %d", limit))
+	key.WriteByte(':')
+	key.WriteString(strconv.FormatUint(uint64(limit), 16))
 
-	// 执行查询
-	rows, err := s.DB.QueryContext(ctx, query.String(), params...)
-	if err != nil {
-		logger.Errorf("QueryEventsByPool query failed, req=%+v, err=%v", req, err)
-		return nil, status.Errorf(codes.Internal, "[%d] query failed", ErrCodeQueryFailed)
-	}
-	defer rows.Close()
+	var (
+		result   []*pb.ChainEvent
+		localErr error
+	)
+	chainEventsByPoolCache.Do(key.String(), func(e *db.Entry, created bool) {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Errorf("panic in QueryEventsByPool cache func: %v", r)
+				localErr = status.Errorf(codes.Internal, "[%d] server panic", ErrCodePanic)
+			}
+		}()
 
-	// 解析结果
-	var results []*pb.ChainEvent
-	for rows.Next() {
-		ev := &pb.ChainEvent{}
-		var tokenAmount, quoteAmount string
-		if err := rows.Scan(
-			&ev.EventId, &ev.EventType, &ev.Dex,
-			&ev.UserWallet, &ev.ToWallet, &ev.PoolAddress,
-			&ev.Token, &ev.QuoteToken, &tokenAmount, &quoteAmount,
-			&ev.VolumeUsd, &ev.PriceUsd, &ev.TxHash, &ev.Signer,
-			&ev.BlockTime, &ev.CreateAt,
-		); err != nil {
-			logger.Errorf("QueryEventsByPool row scan failed: %v", err)
-			return nil, status.Errorf(codes.Internal, "[%d] failed to parse event data", ErrCodeScanFailed)
+		if !created && !e.IsExpired() {
+			cached, ok := e.Result.([]*pb.ChainEvent)
+			if ok {
+				result = cached
+				return
+			}
 		}
-		if ev.Signer == "" {
-			ev.Signer = ev.UserWallet
+
+		// 执行查询
+		rows, queryErr := s.DB.QueryContext(ctx, query.String(), params...)
+		if queryErr != nil {
+			logger.Errorf("QueryEventsByPool query failed, req=%+v, err=%v", req, queryErr)
+			localErr = status.Errorf(codes.Internal, "[%d] query failed", ErrCodeQueryFailed)
+			return
 		}
-		ev.EventIdHash = uint32(utils.EventIdHash(ev.EventId))
-		ev.TokenAmount = utils.ParseUint64(tokenAmount)
-		ev.QuoteAmount = utils.ParseUint64(quoteAmount)
-		ev.Token = utils.DecodeTokenAddress(ev.Token)
-		ev.QuoteToken = utils.DecodeTokenAddress(ev.QuoteToken)
+		defer rows.Close()
 
-		results = append(results, ev)
+		// 解析结果
+		var results []*pb.ChainEvent
+		for rows.Next() {
+			ev := &pb.ChainEvent{}
+			var tokenAmount, quoteAmount string
+			if queryErr = rows.Scan(
+				&ev.EventId, &ev.EventType, &ev.Dex,
+				&ev.UserWallet, &ev.ToWallet, &ev.PoolAddress,
+				&ev.Token, &ev.QuoteToken, &tokenAmount, &quoteAmount,
+				&ev.VolumeUsd, &ev.PriceUsd, &ev.TxHash, &ev.Signer,
+				&ev.BlockTime, &ev.CreateAt,
+			); queryErr != nil {
+				logger.Errorf("QueryEventsByPool row scan failed: %v", queryErr)
+				localErr = status.Errorf(codes.Internal, "[%d] failed to parse event data", ErrCodeScanFailed)
+				return
+			}
+			if ev.Signer == "" {
+				ev.Signer = ev.UserWallet
+			}
+			ev.EventIdHash = uint32(utils.EventIdHash(ev.EventId))
+			ev.TokenAmount = utils.ParseUint64(tokenAmount)
+			ev.QuoteAmount = utils.ParseUint64(quoteAmount)
+			ev.Token = utils.DecodeTokenAddress(ev.Token)
+			ev.QuoteToken = utils.DecodeTokenAddress(ev.QuoteToken)
+
+			results = append(results, ev)
+			e.Result = results
+			e.SetValidAt(time.Now().Add(chainEventsByPoolTTL))
+		}
+
+		if queryErr = rows.Err(); queryErr != nil {
+			logger.Errorf("QueryEventsByPool rows iteration error: %v", queryErr)
+			localErr = status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
+			return
+		}
+	})
+
+	if localErr != nil {
+		return nil, localErr
 	}
-
-	if err := rows.Err(); err != nil {
-		logger.Errorf("QueryEventsByPool rows iteration error: %v", err)
-		return nil, status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
-	}
-
-	return &pb.EventResp{Events: results}, nil
+	return &pb.EventResp{Events: result}, nil
 }

@@ -2,13 +2,16 @@ package balance
 
 import (
 	"context"
+	"dex-ingest-sol/internal/pkg/db"
 	"dex-ingest-sol/internal/pkg/logger"
 	"dex-ingest-sol/internal/pkg/utils"
 	"dex-ingest-sol/pb"
+	"fmt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"sort"
 	"strings"
+	"time"
 )
 
 func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *pb.TokenTopReq) (resp *pb.HolderListResp, err error) {
@@ -49,7 +52,6 @@ func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *p
 	}
 
 	fetchLimit := int(float64(limit) * extraFetchFactor)
-
 	query := `
 		SELECT owner_address, balance
 		FROM balance
@@ -57,54 +59,84 @@ func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *p
 		ORDER BY balance DESC
 		LIMIT ?`
 
-	rows, err := s.DB.QueryContext(ctx, query, encoded, fetchLimit)
-	if err != nil {
-		logger.Errorf("QueryTopHoldersByToken query failed: %v", err)
-		return nil, status.Errorf(codes.Internal, "[%d] query failed", ErrCodeQueryFailed)
-	}
-	defer rows.Close()
+	var (
+		holderList []*pb.Holder
+		localErr   error
+	)
 
-	// 多个账户地址可能属于同一个 owner，我们需要合并这些账户的余额，得到每个 owner 的总余额
-	holderMap := make(map[string]*pb.Holder)
-	for rows.Next() {
-		var owner string
-		var balance string
+	key := fmt.Sprintf("%s:%d", encoded, fetchLimit)
+	topHoldersByTokenCache.Do(key, func(e *db.Entry, created bool) {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Errorf("panic in topHoldersByTokenCache func: %+v", r)
+				localErr = status.Errorf(codes.Internal, "[%d] server panic", ErrCodePanic)
+			}
+		}()
 
-		if err := rows.Scan(&owner, &balance); err != nil {
-			logger.Errorf("QueryTopHoldersByToken row scan failed: %v", err)
-			return nil, status.Errorf(codes.Internal, "[%d] failed to parse row", ErrCodeScanFailed)
-		}
-
-		bal := utils.ParseUint64(balance)
-		if h, ok := holderMap[owner]; ok {
-			h.Balance += bal
-		} else {
-			holderMap[owner] = &pb.Holder{
-				OwnerAddress: owner,
-				Balance:      bal,
+		if !created && !e.IsExpired() {
+			if cached, ok := e.Result.([]*pb.Holder); ok {
+				holderList = cached
+				return
 			}
 		}
-	}
 
-	if err := rows.Err(); err != nil {
-		logger.Errorf("QueryTopHoldersByToken rows iteration error: %v", err)
-		return nil, status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
-	}
+		rows, queryErr := s.DB.QueryContext(ctx, query, encoded, fetchLimit)
+		if queryErr != nil {
+			logger.Errorf("QueryTopHoldersByToken query failed: %v", queryErr)
+			localErr = status.Errorf(codes.Internal, "[%d] query failed", ErrCodeQueryFailed)
+			return
+		}
+		defer rows.Close()
 
-	// 转 slice 并排序
-	holderList := make([]*pb.Holder, 0, len(holderMap))
-	for _, h := range holderMap {
-		holderList = append(holderList, h)
-	}
+		// 多个账户地址可能属于同一个 owner，我们需要合并这些账户的余额，得到每个 owner 的总余额
+		holderMap := make(map[string]*pb.Holder)
+		for rows.Next() {
+			var owner string
+			var balance string
 
-	sort.Slice(holderList, func(i, j int) bool {
-		return holderList[i].Balance > holderList[j].Balance
+			if queryErr = rows.Scan(&owner, &balance); queryErr != nil {
+				logger.Errorf("QueryTopHoldersByToken row scan failed: %v", queryErr)
+				localErr = status.Errorf(codes.Internal, "[%d] failed to parse row", ErrCodeScanFailed)
+				return
+			}
+
+			bal := utils.ParseUint64(balance)
+			if h, ok := holderMap[owner]; ok {
+				h.Balance += bal
+			} else {
+				holderMap[owner] = &pb.Holder{
+					OwnerAddress: owner,
+					Balance:      bal,
+				}
+			}
+		}
+
+		if queryErr = rows.Err(); queryErr != nil {
+			logger.Errorf("QueryTopHoldersByToken rows iteration error: %v", queryErr)
+			localErr = status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
+			return
+		}
+
+		holderList = make([]*pb.Holder, 0, len(holderMap))
+		for _, h := range holderMap {
+			holderList = append(holderList, h)
+		}
+
+		sort.Slice(holderList, func(i, j int) bool {
+			return holderList[i].Balance > holderList[j].Balance
+		})
+
+		e.Result = holderList
+		e.SetValidAt(time.Now().Add(topHoldersByTokenTTL))
 	})
+
+	if localErr != nil {
+		return nil, localErr
+	}
 
 	// 截断前 limit 个
 	if len(holderList) > limit {
 		holderList = holderList[:limit]
 	}
-
 	return &pb.HolderListResp{Holders: holderList}, nil
 }
