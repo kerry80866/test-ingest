@@ -29,12 +29,11 @@ func (e *Entry) IsExpired() bool {
 }
 
 type LockCache struct {
-	mu           sync.Mutex
+	mu           sync.RWMutex
 	entries      map[uint64]*Entry
 	entriesStr   map[string]*Entry
 	maxSize      int
 	useStringKey bool
-	cleanOnce    sync.Once
 }
 
 func NewLockCache(maxSize int, useStringKey bool) *LockCache {
@@ -66,25 +65,33 @@ func (lc *LockCache) doStr(key any, fn func(e *Entry)) {
 	}
 
 	var entry *Entry
+	var entriesLen int
 
 	// 获取或创建 entry
-	lc.mu.Lock()
+	lc.mu.RLock()
 	entry, ok = lc.entriesStr[hash]
-	if !ok {
-		if len(lc.entriesStr) >= lc.maxSize {
-			lc.mu.Unlock()
-			lc.cleanupExpired()
-			lc.mu.Lock()
-			entry, ok = lc.entriesStr[hash]
-		}
-	}
-	if !ok {
-		entry = &Entry{CreatedAt: time.Now()}
-		lc.entriesStr[hash] = entry
-	}
-	entry.inUse.Add(1)
-	lc.mu.Unlock()
+	entriesLen = len(lc.entriesStr)
+	lc.mu.RUnlock()
 
+	if !ok && entriesLen >= lc.maxSize {
+		lc.cleanupExpired()
+
+		lc.mu.RLock()
+		entry, ok = lc.entriesStr[hash]
+		lc.mu.RUnlock()
+	}
+
+	if !ok {
+		lc.mu.Lock()
+		entry, ok = lc.entriesStr[hash]
+		if !ok {
+			entry = &Entry{CreatedAt: time.Now()}
+			lc.entriesStr[hash] = entry
+		}
+		lc.mu.Unlock()
+	}
+
+	entry.inUse.Add(1)
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 	defer entry.inUse.Add(-1)
@@ -99,25 +106,33 @@ func (lc *LockCache) doUint64(key any, fn func(e *Entry)) {
 	}
 
 	var entry *Entry
+	var entriesLen int
 
 	// 获取或创建 entry
-	lc.mu.Lock()
+	lc.mu.RLock()
 	entry, ok = lc.entries[hash]
-	if !ok {
-		if len(lc.entries) >= lc.maxSize {
-			lc.mu.Unlock()
-			lc.cleanupExpired()
-			lc.mu.Lock()
-			entry, ok = lc.entries[hash]
-		}
-	}
-	if !ok {
-		entry = &Entry{CreatedAt: time.Now()}
-		lc.entries[hash] = entry
-	}
-	entry.inUse.Add(1)
-	lc.mu.Unlock()
+	entriesLen = len(lc.entries)
+	lc.mu.RUnlock()
 
+	if !ok && entriesLen >= lc.maxSize {
+		lc.cleanupExpired()
+
+		lc.mu.RLock()
+		entry, ok = lc.entries[hash]
+		lc.mu.RUnlock()
+	}
+
+	if !ok {
+		lc.mu.Lock()
+		entry, ok = lc.entries[hash]
+		if !ok {
+			entry = &Entry{CreatedAt: time.Now()}
+			lc.entries[hash] = entry
+		}
+		lc.mu.Unlock()
+	}
+
+	entry.inUse.Add(1)
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
 	defer entry.inUse.Add(-1)
@@ -135,32 +150,84 @@ func (lc *LockCache) safeRun(e *Entry, fn func(e *Entry)) {
 }
 
 func (lc *LockCache) startAutoCleanup() {
-	go func() {
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
-		for {
-			<-ticker.C
-			lc.cleanupExpired()
-		}
-	}()
+	for {
+		<-ticker.C
+		lc.cleanupExpired()
+	}
 }
 
 func (lc *LockCache) cleanupExpired() {
+	if lc.useStringKey {
+		lc.cleanupExpiredStr()
+	} else {
+		lc.cleanupExpiredUint64()
+	}
+}
+
+func (lc *LockCache) cleanupExpiredStr() {
+	var expiredKeys []string
+
+	lc.mu.RLock()
+	if len(lc.entriesStr) < lc.maxSize/2 {
+		lc.mu.RUnlock()
+		return
+	}
+
+	for key, entry := range lc.entriesStr {
+		if entry.inUse.Load() == 0 && entry.IsExpired() {
+			expiredKeys = append(expiredKeys, key)
+		}
+	}
+	lc.mu.RUnlock()
+
+	if len(expiredKeys) == 0 {
+		return
+	}
+
 	lc.mu.Lock()
 	defer lc.mu.Unlock()
 
-	if lc.useStringKey {
-		for key, entry := range lc.entriesStr {
-			if entry.inUse.Load() == 0 && entry.IsExpired() {
-				delete(lc.entriesStr, key)
-			}
+	if len(lc.entriesStr) < lc.maxSize/2 {
+		return
+	}
+
+	for _, key := range expiredKeys {
+		delete(lc.entriesStr, key)
+	}
+}
+
+func (lc *LockCache) cleanupExpiredUint64() {
+	var expiredKeys []uint64
+
+	lc.mu.RLock()
+	if len(lc.entries) < lc.maxSize/2 {
+		lc.mu.RUnlock()
+		return
+	}
+
+	for key, entry := range lc.entries {
+		if entry.inUse.Load() == 0 && entry.IsExpired() {
+			expiredKeys = append(expiredKeys, key)
 		}
-	} else {
-		for hash, entry := range lc.entries {
-			if entry.inUse.Load() == 0 && entry.IsExpired() {
-				delete(lc.entries, hash)
-			}
-		}
+	}
+	lc.mu.RUnlock()
+
+	if len(expiredKeys) == 0 {
+		return
+	}
+
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+
+	// 再次确认是否仍需清理（可能期间其他 goroutine 已清理或 map 缩小）
+	if len(lc.entries) < lc.maxSize/2 {
+		return
+	}
+
+	for _, key := range expiredKeys {
+		delete(lc.entries, key)
 	}
 }
