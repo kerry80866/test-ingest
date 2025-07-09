@@ -15,6 +15,6 @@ const (
 
 // 缓存实例
 var (
-	poolsByAddressCache = db.NewLockCache(10000, true)
-	poolsByTokenCache   = db.NewLockCache(10000, true)
+	poolsByAddressCache = db.NewLockCache(300)
+	poolsByTokenCache   = db.NewLockCache(300)
 )

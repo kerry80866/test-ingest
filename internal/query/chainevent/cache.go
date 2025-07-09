@@ -16,8 +16,5 @@ const (
 
 // 缓存实例
 var (
-	chainEventsByIDsCache  = db.NewLockCache(10000, true)
-	chainEventsByPoolCache = db.NewLockCache(10000, true)
-	chainEventsByUserCache = db.NewLockCache(10000, true)
-	transferEventsCache    = db.NewLockCache(10000, true)
+	chainEventsByPoolCache = db.NewLockCache(300)
 )

@@ -15,8 +15,8 @@ const (
 
 // 缓存实例
 var (
-	balancesByAccountsCache = db.NewLockCache(10000, true)
-	balancesByOwnerCache    = db.NewLockCache(10000, true)
-	holderCountCache        = db.NewLockCache(10000, true)
-	topHoldersByTokenCache  = db.NewLockCache(1000, true)
+	balancesByAccountsCache = db.NewLockCache(300)
+	balancesByOwnerCache    = db.NewLockCache(300)
+	holderCountCache        = db.NewLockCache(300)
+	topHoldersByTokenCache  = db.NewLockCache(100)
 )
