@@ -89,9 +89,9 @@ func getHolderCountTTL(count int64) time.Duration {
 	case count < 10_000:
 		return 30 * time.Second
 	case count < 20_000:
-		return 1 * time.Minute
+		return 45 * time.Second
 	case count < 50_000:
-		return 3 * time.Minute
+		return 1 * time.Minute
 	default:
 		return 5 * time.Minute
 	}
