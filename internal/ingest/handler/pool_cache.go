@@ -32,9 +32,9 @@ func NewPoolCache() *PoolCache {
 // CheckAndInsert 插入包含 base + quote 的 pool cache（适用于 CLMM 等）
 func (pc *PoolCache) CheckAndInsert(pool, base, quote []byte, dex uint32) (accountKey int64, exists bool) {
 	switch pb.DexType(dex) {
-	case pb.DexType_DEX_RAYDIUM_CLMM:
-	case pb.DexType_DEX_METEORA_DLMM:
-	case pb.DexType_DEX_ORCA_WHIRLPOOL:
+	case pb.DexType_DEX_RAYDIUM_CLMM,
+		pb.DexType_DEX_METEORA_DLMM,
+		pb.DexType_DEX_ORCA_WHIRLPOOL:
 		accountKey = pc.calcAccountKey(base, quote)
 	}
 

@@ -10,9 +10,9 @@ import (
 )
 
 // RetryWithBackoff retries the given operation with exponential backoff.
-// Delay pattern: 100ms, 400ms, 1s, 2s, 5s x N
+// Delay pattern: 100ms, 400ms, 1s, 2s, 5s, 10s x N
 func RetryWithBackoff(ctx context.Context, op func() error) error {
-	const maxRetries = 100
+	const maxRetries = 100000
 
 	var err error
 	for attempt := 0; attempt < maxRetries; attempt++ {
