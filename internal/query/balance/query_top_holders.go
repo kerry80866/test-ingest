@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *pb.TokenTopReq) (resp *pb.HolderListResp, err error) {
+func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *pb.TokenTopReq) (_ *pb.HolderListResp, err error) {
 	const (
 		ErrCodeBase        = 60400
 		ErrCodePanic       = ErrCodeBase + 32
@@ -34,7 +34,7 @@ func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *p
 	const (
 		defaultLimit     = 100
 		maxLimit         = 1000
-		extraFetchFactor = 1.1 // 多查 10%，便于合并后再截断
+		extraFetchFactor = 1.1 // 多查 10%，用于防止多个 account 属于同一个 owner 时影响前 N 名准确性
 	)
 
 	token := strings.TrimSpace(req.TokenAddress)
@@ -59,32 +59,29 @@ func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *p
 		ORDER BY balance DESC
 		LIMIT ?`
 
-	var (
-		holderList []*pb.Holder
-		localErr   error
-	)
-
 	key := fmt.Sprintf("%s:%d", encoded, fetchLimit)
-	topHoldersByTokenCache.Do(key, func(e *db.Entry) {
+	resp, localErr := topHoldersByTokenCache.Do(key, false, func(e *db.Entry, onlyReady bool) (resp any, localErr error) {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Errorf("panic in topHoldersByTokenCache func: %+v", r)
 				localErr = status.Errorf(codes.Internal, "[%d] server panic", ErrCodePanic)
+				resp = nil
 			}
 		}()
 
 		if !e.IsExpired() {
-			if cached, ok := e.Result.([]*pb.Holder); ok {
-				holderList = cached
-				return
+			if cached, success := e.Result.([]*pb.Holder); success {
+				return &pb.HolderListResp{Holders: cached}, nil
 			}
+		}
+		if onlyReady {
+			return nil, status.Errorf(codes.NotFound, "cache not ready")
 		}
 
 		rows, queryErr := s.DB.QueryContext(ctx, query, encoded, fetchLimit)
 		if queryErr != nil {
 			logger.Errorf("QueryTopHoldersByToken query failed: %v", queryErr)
-			localErr = status.Errorf(codes.Internal, "[%d] query failed", ErrCodeQueryFailed)
-			return
+			return nil, status.Errorf(codes.Internal, "[%d] query failed", ErrCodeQueryFailed)
 		}
 		defer rows.Close()
 
@@ -96,8 +93,7 @@ func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *p
 
 			if queryErr = rows.Scan(&owner, &balance); queryErr != nil {
 				logger.Errorf("QueryTopHoldersByToken row scan failed: %v", queryErr)
-				localErr = status.Errorf(codes.Internal, "[%d] failed to parse row", ErrCodeScanFailed)
-				return
+				return nil, status.Errorf(codes.Internal, "[%d] failed to parse row", ErrCodeScanFailed)
 			}
 
 			bal := utils.ParseUint64(balance)
@@ -113,11 +109,10 @@ func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *p
 
 		if queryErr = rows.Err(); queryErr != nil {
 			logger.Errorf("QueryTopHoldersByToken rows iteration error: %v", queryErr)
-			localErr = status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
-			return
+			return nil, status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
 		}
 
-		holderList = make([]*pb.Holder, 0, len(holderMap))
+		holderList := make([]*pb.Holder, 0, len(holderMap))
 		for _, h := range holderMap {
 			holderList = append(holderList, h)
 		}
@@ -126,17 +121,18 @@ func (s *QueryBalanceService) QueryTopHoldersByToken(ctx context.Context, req *p
 			return holderList[i].Balance > holderList[j].Balance
 		})
 
+		// 截断前 limit 个
+		if len(holderList) > limit {
+			holderList = holderList[:limit]
+		}
+
 		e.Result = holderList
 		e.SetValidAt(time.Now().Add(topHoldersByTokenTTL))
+		return &pb.HolderListResp{Holders: holderList}, nil
 	})
 
-	if localErr != nil {
-		return nil, localErr
+	if r, ok := resp.(*pb.HolderListResp); ok {
+		return r, nil
 	}
-
-	// 截断前 limit 个
-	if len(holderList) > limit {
-		holderList = holderList[:limit]
-	}
-	return &pb.HolderListResp{Holders: holderList}, nil
+	return nil, localErr
 }

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func (s *QueryBalanceService) QueryHolderCountByToken(ctx context.Context, req *pb.TokenReq) (resp *pb.HolderCountResp, err error) {
+func (s *QueryBalanceService) QueryHolderCountByToken(ctx context.Context, req *pb.TokenReq) (_ *pb.HolderCountResp, err error) {
 	const (
 		ErrCodeBase        = 60300
 		ErrCodePanic       = ErrCodeBase + 32
@@ -32,31 +32,31 @@ func (s *QueryBalanceService) QueryHolderCountByToken(ctx context.Context, req *
 	}
 
 	encoded := utils.EncodeTokenAddress(token)
+	// 对于已知常用 Token（如 sol/usdc/usdt），由于持有人过多，统计代价高、实际用处不大，直接跳过
 	if utils.IsKnownToken(encoded) {
 		return &pb.HolderCountResp{Count: 0}, nil
 	}
 
-	var (
-		count    int64
-		localErr error
-	)
-
-	holderCountCache.Do(encoded, func(e *db.Entry) {
+	resp, localErr := holderCountCache.Do(encoded, false, func(e *db.Entry, onlyReady bool) (resp any, localErr error) {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Errorf("panic in QueryHolderCountByToken cache func: %v", r)
 				localErr = status.Errorf(codes.Internal, "[%d] server panic", ErrCodePanic)
+				resp = nil
 			}
 		}()
 
 		if !e.IsExpired() {
-			cached, ok := e.Result.(int64)
-			if ok {
-				count = cached
-				return
+			cached, success := e.Result.(int64)
+			if success {
+				return &pb.HolderCountResp{Count: uint64(cached)}, nil
 			}
 		}
+		if onlyReady {
+			return nil, status.Errorf(codes.NotFound, "cache not ready")
+		}
 
+		var count int64
 		queryErr := s.DB.QueryRowContext(ctx, `
 			SELECT COUNT(DISTINCT owner_address)
 			FROM balance
@@ -64,18 +64,18 @@ func (s *QueryBalanceService) QueryHolderCountByToken(ctx context.Context, req *
 		`, encoded).Scan(&count)
 		if queryErr != nil {
 			logger.Errorf("QueryHolderCountByToken failed: token=%s, err=%v", token, queryErr)
-			localErr = status.Errorf(codes.Internal, "[%d] query holder count failed", ErrCodeQueryFailed)
-			return
+			return nil, status.Errorf(codes.Internal, "[%d] query holder count failed", ErrCodeQueryFailed)
 		}
 
 		e.Result = count
 		e.SetValidAt(time.Now().Add(getHolderCountTTL(count)))
+		return &pb.HolderCountResp{Count: uint64(count)}, nil
 	})
 
-	if localErr != nil {
-		return nil, localErr
+	if r, ok := resp.(*pb.HolderCountResp); ok {
+		return r, nil
 	}
-	return &pb.HolderCountResp{Count: uint64(count)}, nil
+	return nil, localErr
 }
 
 func getHolderCountTTL(count int64) time.Duration {

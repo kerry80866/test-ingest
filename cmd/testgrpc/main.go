@@ -43,30 +43,33 @@ func main() {
 
 	client := pb.NewIngestQueryServiceClient(conn)
 
-	//testQueryHolderCountByToken(client)
+	testQueryHolderCountByToken(client)
 	//testQueryTopHoldersByToken(client)
 	//testQueryBalancesByOwner(client)
 	//testQueryBalancesByAccounts(client)
 	//testQueryEventsByIDs(client)
 	//testQueryEventsByUser(client)
-	//testQueryEventsByPool(client)
+	testQueryEventsByPool(client)
 	//testQueryPoolsByAddresses(client)
-	testQueryPoolsByToken(client)
-	testQueryTransferEvents(client)
+	//testQueryPoolsByToken(client)
+	//testQueryTransferEvents(client)
 }
 
 func testQueryHolderCountByToken(client pb.IngestQueryServiceClient) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
+	start := time.Now() // 记录开始时间
 	resp, err := client.QueryHolderCountByToken(ctx, &pb.TokenReq{
 		TokenAddress: testToken,
 	})
+	elapsed := time.Since(start) // 计算耗时
+
 	if err != nil {
-		log.Printf("QueryHolderCountByToken error: %v", err)
+		log.Printf("QueryHolderCountByToken error: %v (elapsed: %v)", err, elapsed)
 		return
 	}
-	log.Printf("HolderCountByToken result: %d", resp.Count)
+	log.Printf("HolderCountByToken result: %d (elapsed: %v)", resp.Count, elapsed)
 }
 
 func testQueryTopHoldersByToken(client pb.IngestQueryServiceClient) {
@@ -169,17 +172,20 @@ func testQueryEventsByPool(client pb.IngestQueryServiceClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	start := time.Now() // 记录开始时间
 	resp, err := client.QueryEventsByPool(ctx, &pb.PoolEventReq{
 		PoolAddress: testPair,
 	})
+	elapsed := time.Since(start) // 计算耗时
 	if err != nil {
 		log.Printf("QueryEventsByPool error: %v", err)
 		return
 	}
-	log.Printf("EventsByPool result:")
-	for _, ev := range resp.Events {
-		log.Printf("event_id=%d event_type=%d pool=%s token=%s", ev.EventId, ev.EventType, ev.PoolAddress, ev.Token)
-	}
+	log.Printf("QueryEventsByPool result: %d (elapsed: %v)", len(resp.Events), elapsed)
+	//log.Printf("EventsByPool result:")
+	//for _, ev := range resp.Events {
+	//	log.Printf("event_id=%d event_type=%d pool=%s token=%s", ev.EventId, ev.EventType, ev.PoolAddress, ev.Token)
+	//}
 }
 
 func testQueryPoolsByAddresses(client pb.IngestQueryServiceClient) {

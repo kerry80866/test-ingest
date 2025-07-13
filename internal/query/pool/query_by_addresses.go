@@ -47,13 +47,11 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 	// 先从缓存中获取
 	for _, addr := range addresses {
 		found := false
-		poolsByAddressCache.Do(addr, func(e *db.Entry) {
-			if !e.IsExpired() {
-				if cached, ok := e.Result.([]*pb.Pool); ok {
-					poolMap[addr] = cached
-					found = true
-					return
-				}
+		poolsByAddressCache.DoRead(addr, func(e *db.Entry) {
+			if cached, ok := e.Result.([]*pb.Pool); ok {
+				poolMap[addr] = cached
+				found = true
+				return
 			}
 		})
 		if !found {
@@ -105,6 +103,7 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 		poolMap[p.PoolAddress] = append(poolMap[p.PoolAddress], p)
 	}
 
+	// 此设计允许“部分成功即缓存”，属于预期行为，可避免热点 pool 因边缘失败丢失缓存
 	for key, pool := range poolMap {
 		setPoolsCache(key, pool)
 	}
@@ -114,22 +113,24 @@ func (s *QueryPoolService) QueryPoolsByAddresses(ctx context.Context, req *pb.Po
 		return nil, status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
 	}
 
+	// 空缓存优先级较低，仅在整体处理完成后写入，用于防止缓存穿透
 	for _, addr := range missingAddrs {
 		if _, ok := poolMap[addr]; !ok {
-			setPoolsCache(addr, []*pb.Pool{}) // 显式写入空缓存
+			setPoolsCache(addr, []*pb.Pool{})
 		}
 	}
 	return makeResult(poolMap, addresses), nil
 }
 
 func setPoolsCache(key string, value []*pb.Pool) {
-	poolsByAddressCache.Do(key, func(e *db.Entry) {
+	poolsByAddressCache.Do(key, true, func(e *db.Entry, onlyReady bool) (resp any, localErr error) {
 		e.Result = value
 		if len(value) == 0 {
 			e.SetValidAt(time.Now().Add(poolsByAddressEmptyTTL))
 		} else {
 			e.SetValidAt(time.Now().Add(poolsByAddressTTL))
 		}
+		return value, nil
 	})
 }
 

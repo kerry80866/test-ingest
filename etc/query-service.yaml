@@ -1,7 +1,7 @@
 # gRPC 服务配置
 grpc:
   port: 50051           # 监听端口，最终拼接为 listen_on: 0.0.0.0:50051
-  timeout: 3000         # 全局 gRPC 方法超时时间，单位毫秒
+  timeout: 10000         # 全局 gRPC 方法超时时间，单位毫秒
   cpu_threshold: 800    # CPU 使用率超过该值时自动熔断（范围 0~1000，默认 900）
   health: false         # 当前用 Nacos 心跳，不启用 Health 接口无影响
 
@@ -10,11 +10,13 @@ grpc:
 
   method_timeouts:      # 方法粒度的 timeout 管理
     - full_method: /pb.IngestQueryService/QueryTopHoldersByToken
-      timeout: 6s
+      timeout: 30s
     - full_method: /pb.IngestQueryService/QueryHolderCountByToken
-      timeout: 5s
+      timeout: 30s
     - full_method: /pb.IngestQueryService/QueryEventsByIDs
-      timeout: 5s
+      timeout: 30s
+    - full_method: /pb.IngestQueryService/QueryEventsByPool
+      timeout: 30s
 
 # 监控服务配置
 monitor:

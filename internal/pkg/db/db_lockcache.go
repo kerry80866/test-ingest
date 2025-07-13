@@ -2,6 +2,7 @@ package db
 
 import (
 	"dex-ingest-sol/internal/pkg/logger"
+	"fmt"
 	"github.com/cespare/xxhash/v2"
 	"runtime/debug"
 	"sync"
@@ -15,7 +16,7 @@ const (
 )
 
 type Entry struct {
-	mu        sync.Mutex
+	mu        sync.RWMutex
 	Result    any
 	Raw       any
 	CreatedAt time.Time
@@ -61,7 +62,37 @@ func (lc *LockCache) getShard(key string) *shard {
 	return lc.shards[mixed&(shardCount-1)]
 }
 
-func (lc *LockCache) Do(hash string, fn func(e *Entry)) {
+func (lc *LockCache) DoRead(hash string, fn func(e *Entry)) {
+	s := lc.getShard(hash)
+	var entry *Entry
+
+	// 获取或创建 entry
+	s.mu.RLock()
+	entry, ok := s.entries[hash]
+	s.mu.RUnlock()
+
+	if !ok || entry.IsExpired() {
+		return
+	}
+
+	entry.inUse.Add(1)
+	defer entry.inUse.Add(-1)
+
+	entry.mu.RLock()
+	defer entry.mu.RUnlock()
+	lc.safeRead(entry, fn)
+}
+
+func (lc *LockCache) safeRead(e *Entry, fn func(e *Entry)) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Errorf("[LockCache] panic in fn: %v\n%s", r, debug.Stack())
+		}
+	}()
+	fn(e)
+}
+
+func (lc *LockCache) Do(hash string, skipRead bool, fn func(e *Entry, onlyReady bool) (any, error)) (any, error) {
 	s := lc.getShard(hash)
 	var entry *Entry
 	var entriesLen int
@@ -96,21 +127,32 @@ func (lc *LockCache) Do(hash string, fn func(e *Entry)) {
 		// - 不影响功能，仅多了一次请求（容忍型设计，性能优先）
 		entry.inUse.Add(1)
 	}
+	defer entry.inUse.Add(-1)
+
+	if !skipRead {
+		entry.mu.RLock()
+		if !entry.IsExpired() {
+			if data, err := lc.safeRun(entry, true, fn); err != nil {
+				entry.mu.RUnlock()
+				return data, err
+			}
+		}
+		entry.mu.RUnlock()
+	}
 
 	entry.mu.Lock()
 	defer entry.mu.Unlock()
-	defer entry.inUse.Add(-1)
-
-	lc.safeRun(entry, fn)
+	return lc.safeRun(entry, false, fn)
 }
 
-func (lc *LockCache) safeRun(e *Entry, fn func(e *Entry)) {
+func (lc *LockCache) safeRun(e *Entry, onlyReady bool, fn func(e *Entry, onlyReady bool) (any, error)) (res any, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			logger.Errorf("[LockCache] panic in fn: %v\n%s", r, debug.Stack())
+			err = fmt.Errorf("panic in cache handler: %v", r)
 		}
 	}()
-	fn(e)
+	return fn(e, onlyReady)
 }
 
 func (lc *LockCache) startAutoCleanup() {

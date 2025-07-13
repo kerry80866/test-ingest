@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.PoolEventReq) (resp *pb.EventResp, err error) {
+func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.PoolEventReq) (_ *pb.EventResp, err error) {
 	const (
 		ErrCodeBase        = 60600
 		ErrCodePanic       = ErrCodeBase + 32
@@ -93,6 +93,7 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 	if req.Limit != nil && *req.Limit > 0 {
 		limit = int(*req.Limit)
 		if limit > MaxLimit {
+			logger.Warnf("QueryEventsByPool: limit too large (%d), trimmed to %d", limit, MaxLimit)
 			limit = MaxLimit
 		}
 	}
@@ -100,36 +101,35 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 	key.WriteString(":l")
 	key.WriteString(strconv.FormatUint(uint64(limit), 16))
 
-	var (
-		result   []*pb.ChainEvent
-		localErr error
-	)
-	chainEventsByPoolCache.Do(key.String(), func(e *db.Entry) {
+	resp, localErr := chainEventsByPoolCache.Do(key.String(), false, func(e *db.Entry, onlyReady bool) (resp any, localErr error) {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Errorf("panic in QueryEventsByPool cache func: %v", r)
 				localErr = status.Errorf(codes.Internal, "[%d] server panic", ErrCodePanic)
+				resp = nil
 			}
 		}()
 
 		if !e.IsExpired() {
-			cached, ok := e.Result.([]*pb.ChainEvent)
-			if ok {
-				result = cached
-				return
+			cached, success := e.Result.([]*pb.ChainEvent)
+			if success {
+				return &pb.EventResp{Events: cached}, nil
 			}
+		}
+		if onlyReady {
+			return nil, status.Errorf(codes.NotFound, "cache not ready")
 		}
 
 		// 执行查询
 		rows, queryErr := s.DB.QueryContext(ctx, query.String(), params...)
 		if queryErr != nil {
 			logger.Errorf("QueryEventsByPool query failed, req=%+v, err=%v", req, queryErr)
-			localErr = status.Errorf(codes.Internal, "[%d] query failed", ErrCodeQueryFailed)
-			return
+			return nil, status.Errorf(codes.Internal, "[%d] query failed", ErrCodeQueryFailed)
 		}
 		defer rows.Close()
 
 		// 解析结果
+		result := make([]*pb.ChainEvent, 0, limit)
 		for rows.Next() {
 			ev := &pb.ChainEvent{}
 			var tokenAmount, quoteAmount string
@@ -141,8 +141,7 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 				&ev.BlockTime, &ev.CreateAt,
 			); queryErr != nil {
 				logger.Errorf("QueryEventsByPool row scan failed: %v", queryErr)
-				localErr = status.Errorf(codes.Internal, "[%d] failed to parse event data", ErrCodeScanFailed)
-				return
+				return nil, status.Errorf(codes.Internal, "[%d] failed to parse event data", ErrCodeScanFailed)
 			}
 			if ev.Signer == "" {
 				ev.Signer = ev.UserWallet
@@ -158,8 +157,7 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 
 		if queryErr = rows.Err(); queryErr != nil {
 			logger.Errorf("QueryEventsByPool rows iteration error: %v", queryErr)
-			localErr = status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
-			return
+			return nil, status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
 		}
 
 		e.Result = result
@@ -168,10 +166,11 @@ func (s *QueryChainEventService) QueryEventsByPool(ctx context.Context, req *pb.
 		} else {
 			e.SetValidAt(time.Now().Add(chainEventsByPoolTTL))
 		}
+		return &pb.EventResp{Events: result}, nil
 	})
 
-	if localErr != nil {
-		return nil, localErr
+	if r, ok := resp.(*pb.EventResp); ok {
+		return r, nil
 	}
-	return &pb.EventResp{Events: result}, nil
+	return nil, localErr
 }

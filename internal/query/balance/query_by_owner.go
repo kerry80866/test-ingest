@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.OwnerReq) (resp *pb.BalanceResp, err error) {
+func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.OwnerReq) (_ *pb.BalanceResp, err error) {
 	const (
 		ErrCodeBase        = 60200
 		ErrCodePanic       = ErrCodeBase + 32
@@ -67,46 +67,42 @@ func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.
 		args = []any{owner, maxResultLimit}
 	}
 
-	var (
-		result   []*pb.Balance
-		localErr error
-	)
-
-	balancesByOwnerCache.Do(key, func(e *db.Entry) {
+	resp, localErr := balancesByOwnerCache.Do(key, false, func(e *db.Entry, onlyReady bool) (resp any, localErr error) {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Errorf("panic in QueryBalancesByOwner: %v", r)
 				localErr = status.Errorf(codes.Internal, "[%d] server panic", ErrCodePanic)
+				resp = nil
 			}
 		}()
 
 		if !e.IsExpired() {
-			cached, ok := e.Result.([]*pb.Balance)
-			if ok {
-				result = cached
-				return
+			cached, success := e.Result.([]*pb.Balance)
+			if success {
+				return &pb.BalanceResp{Balances: cached}, nil
 			}
+		}
+		if onlyReady {
+			return nil, status.Errorf(codes.NotFound, "cache not ready")
 		}
 
 		rows, queryErr := s.DB.QueryContext(ctx, query, args...)
 		if queryErr != nil {
 			logger.Errorf("QueryBalancesByOwner query failed: %v", queryErr)
-			localErr = status.Errorf(codes.Internal, "[%d] query error", ErrCodeQueryFailed)
-			return
+			return nil, status.Errorf(codes.Internal, "[%d] query error", ErrCodeQueryFailed)
 		}
 		defer rows.Close()
 
-		result = make([]*pb.Balance, 0, 10)
+		result := make([]*pb.Balance, 0, 10)
 		for rows.Next() {
 			var balanceStr string
 			bal := &pb.Balance{
 				OwnerAddress: owner,
 				LastEventId:  0, // 数据库没查出，可设为默认值
 			}
-			if queryErr = rows.Scan(&bal.AccountAddress, &bal.TokenAddress, &balanceStr); queryErr != nil {
-				logger.Errorf("QueryBalancesByOwner row scan failed: %v", queryErr)
-				localErr = status.Errorf(codes.Internal, "[%d] data scan failed", ErrCodeScanFailed)
-				return
+			if scanErr := rows.Scan(&bal.AccountAddress, &bal.TokenAddress, &balanceStr); scanErr != nil {
+				logger.Errorf("QueryBalancesByOwner row scan failed: %v", scanErr)
+				return nil, status.Errorf(codes.Internal, "[%d] data scan failed", ErrCodeScanFailed)
 			}
 			bal.Balance = utils.ParseUint64(balanceStr)
 			bal.TokenAddress = utils.DecodeTokenAddress(bal.TokenAddress)
@@ -115,16 +111,16 @@ func (s *QueryBalanceService) QueryBalancesByOwner(ctx context.Context, req *pb.
 
 		if queryErr = rows.Err(); queryErr != nil {
 			logger.Errorf("QueryBalancesByOwner rows iteration error: %v", queryErr)
-			localErr = status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
-			return
+			return nil, status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
 		}
 
 		e.Result = result
 		e.SetValidAt(time.Now().Add(balancesByOwnerTTL))
+		return &pb.BalanceResp{Balances: result}, nil
 	})
 
-	if localErr != nil {
-		return nil, localErr
+	if r, ok := resp.(*pb.BalanceResp); ok {
+		return r, nil
 	}
-	return &pb.BalanceResp{Balances: result}, nil
+	return nil, localErr
 }

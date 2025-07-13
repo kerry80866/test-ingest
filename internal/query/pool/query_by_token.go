@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func (s *QueryPoolService) QueryPoolsByToken(ctx context.Context, req *pb.PoolTokenReq) (resp *pb.PoolResp, err error) {
+func (s *QueryPoolService) QueryPoolsByToken(ctx context.Context, req *pb.PoolTokenReq) (_ *pb.PoolResp, err error) {
 	const (
 		ErrCodeBase        = 60900
 		ErrCodePanic       = ErrCodeBase + 32
@@ -62,35 +62,33 @@ func (s *QueryPoolService) QueryPoolsByToken(ctx context.Context, req *pb.PoolTo
 	query.WriteString(" ORDER BY pool_address")
 
 	// ========== 尝试走缓存 ==========
-	var (
-		pools    []*pb.Pool
-		localErr error
-	)
-
-	poolsByTokenCache.Do(key, func(e *db.Entry) {
+	resp, localErr := poolsByTokenCache.Do(key, false, func(e *db.Entry, onlyReady bool) (resp any, localErr error) {
 		defer func() {
 			if r := recover(); r != nil {
 				logger.Errorf("panic in QueryPoolsByToken cache func: %v", r)
 				localErr = status.Errorf(codes.Internal, "[%d] server panic", ErrCodePanic)
+				resp = nil
 			}
 		}()
 
 		if !e.IsExpired() {
 			if cached, ok := e.Result.([]*pb.Pool); ok {
-				pools = cached
-				return
+				return &pb.PoolResp{Pools: cached}, nil
 			}
+		}
+		if onlyReady {
+			return nil, status.Errorf(codes.NotFound, "cache not ready")
 		}
 
 		rows, queryErr := s.DB.QueryContext(ctx, query.String(), params...)
 		if queryErr != nil {
 			logger.Errorf("QueryPoolsByToken query failed: %v", queryErr)
 			localErr = status.Errorf(codes.Internal, "[%d] query failed", ErrCodeQueryFailed)
-			return
+			return nil, localErr
 		}
 		defer rows.Close()
 
-		pools = make([]*pb.Pool, 0, 10)
+		pools := make([]*pb.Pool, 0, 10)
 		for rows.Next() {
 			p := &pb.Pool{}
 			var createAt *int32
@@ -100,7 +98,7 @@ func (s *QueryPoolService) QueryPoolsByToken(ctx context.Context, req *pb.PoolTo
 			); queryErr != nil {
 				logger.Errorf("QueryPoolsByToken row scan failed: %v", queryErr)
 				localErr = status.Errorf(codes.Internal, "[%d] failed to parse pool data", ErrCodeScanFailed)
-				return
+				return nil, localErr
 			}
 			if createAt != nil {
 				p.CreateAt = uint32(*createAt)
@@ -113,7 +111,7 @@ func (s *QueryPoolService) QueryPoolsByToken(ctx context.Context, req *pb.PoolTo
 		if queryErr = rows.Err(); queryErr != nil {
 			logger.Errorf("QueryPoolsByToken rows iteration error: %v", queryErr)
 			localErr = status.Errorf(codes.Internal, "[%d] rows iteration error", ErrCodeRowsIter)
-			return
+			return nil, localErr
 		}
 
 		e.Result = pools
@@ -122,10 +120,11 @@ func (s *QueryPoolService) QueryPoolsByToken(ctx context.Context, req *pb.PoolTo
 		} else {
 			e.SetValidAt(time.Now().Add(poolsByTokenTTL)) // 有效结果 TTL
 		}
+		return &pb.PoolResp{Pools: pools}, nil
 	})
 
-	if localErr != nil {
-		return nil, localErr
+	if r, ok := resp.(*pb.PoolResp); ok {
+		return r, nil
 	}
-	return &pb.PoolResp{Pools: pools}, nil
+	return nil, localErr
 }
