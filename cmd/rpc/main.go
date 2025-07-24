@@ -1,33 +1,26 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"dex-ingest-sol/cmd/rpc/common"
 	"dex-ingest-sol/cmd/rpc/db"
 	_ "github.com/go-sql-driver/mysql" // 替换为你用的 driver
 	_ "github.com/lib/pq"
 	"log"
+	"time"
 )
 
 const lindormSourceDSN = ""
 const lindormDSN = ""
 
-const endpoint = ""
-
-var tokenMap = make(map[string]int16)
-
 func main() {
-	tokenMap["0"] = 9
-	tokenMap["1"] = 9
-	tokenMap["2"] = 6
-	tokenMap["3"] = 6
 
 	lindormSource, err := sql.Open("mysql", lindormSourceDSN)
 	if err != nil {
 		log.Fatalf("连接lindorm失败: %v", err)
 	}
-	db.LoadTokenDecimals(lindormSource, tokenMap)
-	lindormSource.Close()
+	defer lindormSource.Close()
 
 	lindorm, err := sql.Open("mysql", lindormDSN)
 	if err != nil {
@@ -37,71 +30,29 @@ func main() {
 
 	//cl := client.NewClient(endpoint)
 
+	lastAddr := ""
+	total := 0
+
 	for {
-		pools := db.Query(lindorm)
+		var pools []*common.Pool
+		lastAddr, pools = db.LoadPools(lindormSource, lastAddr)
 		if len(pools) == 0 {
-			log.Printf("查询到空池，结束")
+			log.Printf("✅ 查询到空池，迁移完成，总计迁移 %d 个 pools", total)
 			return
 		}
 
-		//tokens := getTokens(pools)
-		//log.Printf("待补全的 token 数量: %d", len(tokens))
+		log.Printf("准备写入 %d 个 pools，lastAddr=%s", len(pools), lastAddr)
 
-		//chain.QueryTokenDecimalsFromChain(cl, tokens, tokenMap)
-		//log.Printf("链上 decimals 查询完成")
-
-		list := make([]*common.LindormResult, 0, len(pools))
-
-		missCount := 0
-		for _, pool := range pools {
-			baseDecimals, baseOk := tokenMap[pool.TokenAddress]
-			quoteDecimals, quoteOk := tokenMap[pool.QuoteAddress]
-
-			if baseOk {
-				pool.TokenDecimals = baseDecimals
-			}
-			if quoteOk {
-				pool.QuoteDecimals = quoteDecimals
-			}
-
-			if baseOk && quoteOk {
-				list = append(list, pool)
-			} else {
-				missCount++
-			}
+		err := db.InsertPools(context.Background(), lindorm, pools)
+		if err != nil {
+			log.Printf("❌ 写入失败 at %s: %v", lastAddr, err)
+			time.Sleep(200 * time.Millisecond)
+			continue
 		}
 
-		log.Printf("可写入 pool 数量: %d，跳过数量: %d", len(list), missCount)
+		total += len(pools)
+		log.Printf("✅ 当前已迁移 %d 个 pools，最新 lastAddr=%s", total, lastAddr)
 
-		if len(list) > 0 {
-			err := db.InsertPools(lindorm, list)
-			if err != nil {
-				log.Printf("写入 Lindorm 失败: %v", err)
-			} else {
-				log.Printf("写入 Lindorm 成功，写入数量: %d", len(list))
-			}
-		}
+		time.Sleep(20 * time.Millisecond) // 防止压垮 DB
 	}
-}
-
-func getTokens(pools []*common.LindormResult) []string {
-	unique := make(map[string]struct{}, len(pools))
-	for _, pool := range pools {
-		if decimals, ok := tokenMap[pool.TokenAddress]; ok {
-			pool.TokenDecimals = decimals
-		} else {
-			unique[pool.TokenAddress] = struct{}{}
-		}
-		if decimals, ok := tokenMap[pool.QuoteAddress]; ok {
-			pool.QuoteDecimals = decimals
-		} else {
-			unique[pool.QuoteAddress] = struct{}{}
-		}
-	}
-
-	list := make([]string, 0, len(unique))
-	for t := range unique {
-		list = append(list, t)
-	}
-	return list
 }

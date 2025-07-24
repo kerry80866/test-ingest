@@ -6,25 +6,42 @@ import (
 	"dex-ingest-sol/cmd/rpc/common"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
 )
 
-const poolFieldCount = 4
-const poolPlaceholders = "(?,?,?,?)"
+const (
+	poolBatchSize    = 1000
+	poolFieldCount11 = 11 // 包含 create_at
+	poolFieldCount10 = 10 // 不包含 create_at
+)
 
-func InsertPools(dbConn *sql.DB, pools []*common.LindormResult) error {
-	if len(pools) == 0 {
-		return nil
+func genPlaceholders(n int) string {
+	if n <= 0 {
+		return "()"
 	}
-	const batchSize = 100
+	return "(" + strings.Repeat("?,", n-1) + "?)"
+}
+
+var (
+	poolPlaceholders11 = genPlaceholders(poolFieldCount11)
+	poolPlaceholders10 = genPlaceholders(poolFieldCount10)
+)
+
+func InsertPools(ctx context.Context, dbConn *sql.DB, pools []*common.Pool) error {
+	withCreateAtPools, withoutCreateAtPools := dedupAndSplitPools(pools)
+
+	const maxWorkers = 10
+	const minBatchSize = 100
+	withBatchSize, withoutBatchSize := allocateBatchSize(len(withCreateAtPools), len(withoutCreateAtPools), maxWorkers, minBatchSize)
 
 	var wg sync.WaitGroup
 	var once sync.Once
 	var firstErr error
 
-	dispatch := func(pools []*common.LindormResult, batchSize int) {
+	dispatch := func(pools []*common.Pool, withCreateAt bool, batchSize int) {
 		poolCount := len(pools)
 		if poolCount == 0 || batchSize == 0 {
 			return
@@ -38,24 +55,25 @@ func InsertPools(dbConn *sql.DB, pools []*common.LindormResult) error {
 			batch := pools[i:end]
 
 			wg.Add(1)
-			go func(batch []*common.LindormResult, start int) {
+			go func(batch []*common.Pool, start, end int) {
 				defer wg.Done()
-				if err := insertPoolsSerial(dbConn, batch, start); err != nil {
+				if err := insertPoolsSerial(ctx, dbConn, batch, start, end, withCreateAt); err != nil {
 					once.Do(func() {
 						firstErr = err
 					})
 				}
-			}(batch, i)
+			}(batch, i, end)
 		}
 	}
 
-	dispatch(pools, batchSize)
+	dispatch(withCreateAtPools, true, withBatchSize)
+	dispatch(withoutCreateAtPools, false, withoutBatchSize)
 
 	wg.Wait()
 	return firstErr
 }
 
-func insertPoolsSerial(dbConn *sql.DB, pools []*common.LindormResult, startIndex int) (err error) {
+func insertPoolsSerial(ctx context.Context, dbConn *sql.DB, pools []*common.Pool, startIndex, endIndex int, fullField bool) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("insertPoolsSerial panic: %v", r)
@@ -63,9 +81,8 @@ func insertPoolsSerial(dbConn *sql.DB, pools []*common.LindormResult, startIndex
 	}()
 
 	total := len(pools)
-	estimatedRowSQLSize := len(poolPlaceholders) + 32
+	estimatedRowSQLSize := len(poolPlaceholders11) + 32
 
-	const poolBatchSize = 1000
 	for i := 0; i < total; i += poolBatchSize {
 		end := i + poolBatchSize
 		if end > total {
@@ -77,24 +94,43 @@ func insertPoolsSerial(dbConn *sql.DB, pools []*common.LindormResult, startIndex
 		builder.Grow(512 + len(batch)*estimatedRowSQLSize)
 
 		var args []any
-		builder.WriteString("INSERT INTO pool(" +
-			"pool_address,account_key,token_decimals,quote_decimals) VALUES ")
-		args = make([]any, 0, len(batch)*poolFieldCount)
+		if fullField {
+			builder.WriteString("INSERT INTO pool(" +
+				"pool_address,account_key,dex,token_decimals,quote_decimals,token_address,quote_address," +
+				"token_account,quote_account,create_at,update_at) VALUES")
+			args = make([]any, 0, len(batch)*poolFieldCount11)
 
-		for j, p := range batch {
-			if j > 0 {
-				builder.WriteByte(',')
+			for j, p := range batch {
+				if j > 0 {
+					builder.WriteByte(',')
+				}
+				builder.WriteString(poolPlaceholders11)
+				args = append(args,
+					p.PoolAddress, p.AccountKey, p.Dex, p.TokenDecimals, p.QuoteDecimals,
+					p.TokenAddress, p.QuoteAddress, p.TokenAccount, p.QuoteAccount, p.CreateAt, p.UpdateAt,
+				)
 			}
-			builder.WriteString(poolPlaceholders)
-			args = append(args,
-				p.PoolAddress, p.AccountKey, p.TokenDecimals, p.QuoteDecimals,
-			)
+		} else {
+			builder.WriteString("INSERT INTO pool(" +
+				"pool_address,account_key,dex,token_decimals,quote_decimals,token_address,quote_address," +
+				"token_account,quote_account,update_at) VALUES")
+			args = make([]any, 0, len(batch)*poolFieldCount10)
+
+			for j, p := range batch {
+				if j > 0 {
+					builder.WriteByte(',')
+				}
+				builder.WriteString(poolPlaceholders10)
+				args = append(args,
+					p.PoolAddress, p.AccountKey, p.Dex, p.TokenDecimals, p.QuoteDecimals,
+					p.TokenAddress, p.QuoteAddress, p.TokenAccount, p.QuoteAccount, p.UpdateAt,
+				)
+			}
 		}
 
 		query := builder.String()
 		retryRange := fmt.Sprintf("[%d:%d]", startIndex+i, startIndex+end)
 
-		ctx := context.Background()
 		err = retryWithBackoff(ctx, func() error {
 			_, execErr := dbConn.ExecContext(ctx, query, args...)
 			if execErr != nil {
@@ -109,8 +145,101 @@ func insertPoolsSerial(dbConn *sql.DB, pools []*common.LindormResult, startIndex
 	return nil
 }
 
+func allocateBatchSize(withCount, withoutCount, maxWorkers, minBatchSize int) (withBatchSize, withoutBatchSize int) {
+	totalCount := withCount + withoutCount
+	if totalCount == 0 {
+		return 0, 0
+	}
+
+	if maxWorkers < 2 {
+		// fallback 保底值，避免出现负值或分配失败
+		maxWorkers = 2
+	}
+
+	maxWithWorkers := int(math.Round(float64(withCount) * float64(maxWorkers) / float64(totalCount)))
+	maxWithoutWorkers := maxWorkers - maxWithWorkers
+
+	// 修正边界，确保只要有数据就至少分配一个 worker
+	if maxWithWorkers == 0 && withCount > 0 {
+		maxWithWorkers++
+
+	} else if maxWithoutWorkers == 0 && withoutCount > 0 {
+		maxWithWorkers--
+		maxWithoutWorkers++
+	}
+
+	if withCount > 0 {
+		if withCount > minBatchSize*maxWithWorkers {
+			withBatchSize = (withCount + maxWithWorkers - 1) / maxWithWorkers
+		} else {
+			withBatchSize = minBatchSize
+		}
+	}
+
+	if withoutCount > 0 {
+		if withoutCount > minBatchSize*maxWithoutWorkers {
+			withoutBatchSize = (withoutCount + maxWithoutWorkers - 1) / maxWithoutWorkers
+		} else {
+			withoutBatchSize = minBatchSize
+		}
+	}
+	return withBatchSize, withoutBatchSize
+}
+
+func dedupAndSplitPools(pools []*common.Pool) (
+	withCreateAt []*common.Pool,
+	withoutCreateAt []*common.Pool,
+) {
+	if len(pools) == 0 {
+		return nil, nil
+	}
+
+	poolMap := make(map[string]*common.Pool, len(pools))
+	for _, p := range pools {
+		key := fmt.Sprintf("%s|%d|%s|%s", p.PoolAddress, p.AccountKey, p.TokenAccount, p.QuoteAccount)
+		existing, ok := poolMap[key]
+		if !ok {
+			poolMap[key] = p
+			continue
+		}
+
+		// 字段冲突检查（可选，防御性编程）
+		var conflicts []string
+		if p.Dex != existing.Dex {
+			conflicts = append(conflicts, fmt.Sprintf("Dex: %d != %d", p.Dex, existing.Dex))
+		}
+		if p.TokenAddress != existing.TokenAddress {
+			conflicts = append(conflicts, fmt.Sprintf("TokenAddress: %s != %s", p.TokenAddress, existing.TokenAddress))
+		}
+		if p.QuoteAddress != existing.QuoteAddress {
+			conflicts = append(conflicts, fmt.Sprintf("QuoteAddress: %s != %s", p.QuoteAddress, existing.QuoteAddress))
+		}
+		if len(conflicts) > 0 {
+			continue
+		}
+
+		// 选择更早的 createAt
+		if (existing.CreateAt == 0 && p.CreateAt != 0) || (p.CreateAt < existing.CreateAt && p.CreateAt != 0) {
+			existing.CreateAt = p.CreateAt
+		}
+	}
+
+	now := int32(time.Now().Unix())
+	withCreateAt = make([]*common.Pool, 0, len(poolMap))
+	withoutCreateAt = make([]*common.Pool, 0, len(poolMap))
+	for _, p := range poolMap {
+		p.UpdateAt = now
+		if p.CreateAt > 0 {
+			withCreateAt = append(withCreateAt, p)
+		} else {
+			withoutCreateAt = append(withoutCreateAt, p)
+		}
+	}
+	return
+}
+
 func retryWithBackoff(ctx context.Context, op func() error) error {
-	const maxRetries = 10
+	const maxRetries = 100000
 
 	var err error
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -128,6 +257,8 @@ func retryWithBackoff(ctx context.Context, op func() error) error {
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
+
+		// 计算下一次延迟
 
 		// 日志放在此处，避免第一次 op() 之前就打印
 		time.Sleep(1 * time.Second)
