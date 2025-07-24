@@ -2,15 +2,14 @@ package main
 
 import (
 	"database/sql"
-	"dex-ingest-sol/cmd/rpc/chain"
 	"dex-ingest-sol/cmd/rpc/common"
 	"dex-ingest-sol/cmd/rpc/db"
-	"github.com/blocto/solana-go-sdk/client"
 	_ "github.com/go-sql-driver/mysql" // 替换为你用的 driver
 	_ "github.com/lib/pq"
 	"log"
 )
 
+const lindormSourceDSN = ""
 const lindormDSN = ""
 
 const endpoint = ""
@@ -23,13 +22,20 @@ func main() {
 	tokenMap["2"] = 6
 	tokenMap["3"] = 6
 
+	lindormSource, err := sql.Open("mysql", lindormSourceDSN)
+	if err != nil {
+		log.Fatalf("连接lindorm失败: %v", err)
+	}
+	db.LoadTokenDecimals(lindormSource, tokenMap)
+	lindormSource.Close()
+
 	lindorm, err := sql.Open("mysql", lindormDSN)
 	if err != nil {
 		log.Fatalf("连接lindorm失败: %v", err)
 	}
 	defer lindorm.Close()
 
-	cl := client.NewClient(endpoint)
+	//cl := client.NewClient(endpoint)
 
 	for {
 		pools := db.Query(lindorm)
@@ -38,11 +44,11 @@ func main() {
 			return
 		}
 
-		tokens := getTokens(pools)
-		log.Printf("待补全的 token 数量: %d", len(tokens))
+		//tokens := getTokens(pools)
+		//log.Printf("待补全的 token 数量: %d", len(tokens))
 
-		chain.QueryTokenDecimalsFromChain(cl, tokens, tokenMap)
-		log.Printf("链上 decimals 查询完成")
+		//chain.QueryTokenDecimalsFromChain(cl, tokens, tokenMap)
+		//log.Printf("链上 decimals 查询完成")
 
 		list := make([]*common.LindormResult, 0, len(pools))
 
